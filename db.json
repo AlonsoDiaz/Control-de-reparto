@@ -1,0 +1,236 @@
+[
+    {
+        "rut": "12.345.678-9",
+        "nombre_completo": "Juan Pérez González",
+        "direccion": "Av. Los Olivos 123",
+        "comuna": "Santiago",
+        "cajas_de_huevos_total": 120,
+        "cajas_de_huevos": 0
+    },
+    {
+        "nombre_completo": "María López Rivas",
+        "direccion": "Calle Las Rosas 456",
+        "comuna": "Valparaíso",
+        "cajas_de_huevos_total": 200,
+        "cajas_de_huevos": 0
+    },
+    {
+        "rut": "21.987.654-3",
+        "nombre_completo": "Carlos Muñoz Vega",
+        "direccion": "Pasaje Los Robles 789",
+        "comuna": "Concepción",
+        "cajas_de_huevos_total": 77,
+        "cajas_de_huevos": 0
+    },
+    {
+        "rut": "15.876.234-2",
+        "nombre_completo": "Ana Torres Silva",
+        "direccion": "Camino El Bosque 145",
+        "comuna": "La Florida",
+        "cajas_de_huevos_total": 237,
+        "cajas_de_huevos": 0
+    },
+    {
+        "nombre_completo": "Pedro Ramírez Soto",
+        "direccion": "Av. Independencia 999",
+        "comuna": "Santiago",
+        "cajas_de_huevos_total": 220,
+        "cajas_de_huevos": 0
+    },
+    {
+        "rut": "18.345.222-1",
+        "nombre_completo": "Lucía Herrera Vidal",
+        "direccion": "Los Alerces 12",
+        "comuna": "Puente Alto",
+        "cajas_de_huevos_total": 150,
+        "cajas_de_huevos": 0
+    },
+    {
+        "rut": "17.234.876-4",
+        "nombre_completo": "Rodrigo Castro Núñez",
+        "direccion": "Las Violetas 555",
+        "comuna": "Ñuñoa",
+        "cajas_de_huevos_total": 95,
+        "cajas_de_huevos": 0
+    },
+    {
+        "nombre_completo": "Fernanda Pino Alarcón",
+        "direccion": "Calle Nueva 231",
+        "comuna": "Maipú",
+        "cajas_de_huevos_total": 130,
+        "cajas_de_huevos": 0
+    },
+    {
+        "rut": "19.876.345-0",
+        "nombre_completo": "Ricardo Peña Soto",
+        "direccion": "Camino Real 102",
+        "comuna": "Rancagua",
+        "cajas_de_huevos_total": 82,
+        "cajas_de_huevos": 0
+    },
+    {
+        "nombre_completo": "Isidora Fuentes Reyes",
+        "direccion": "Pasaje Primavera 67",
+        "comuna": "La Reina",
+        "cajas_de_huevos_total": 140,
+        "cajas_de_huevos": 0
+    },
+    {
+        "rut": "13.222.567-8",
+        "nombre_completo": "Nicolás Vega Contreras",
+        "direccion": "Av. Principal 300",
+        "comuna": "San Bernardo",
+        "cajas_de_huevos_total": 200,
+        "cajas_de_huevos": 0
+    },
+    {
+        "nombre_completo": "Paula Díaz Ramírez",
+        "direccion": "Calle Central 321",
+        "comuna": "Melipilla",
+        "cajas_de_huevos_total": 90,
+        "cajas_de_huevos": 0
+    },
+    {
+        "rut": "22.333.111-2",
+        "nombre_completo": "Felipe Sandoval Araya",
+        "direccion": "Av. Los Pinos 40",
+        "comuna": "Quilicura",
+        "cajas_de_huevos_total": 160,
+        "cajas_de_huevos": 0
+    },
+    {
+        "nombre_completo": "Camila Reyes Vergara",
+        "direccion": "Calle Norte 85",
+        "comuna": "Providencia",
+        "cajas_de_huevos_total": 250,
+        "cajas_de_huevos": 0
+    },
+    {
+        "rut": "10.987.654-3",
+        "nombre_completo": "Andrés Mella Jara",
+        "direccion": "Pasaje Sur 12",
+        "comuna": "San Miguel",
+        "cajas_de_huevos_total": 60,
+        "cajas_de_huevos": 0
+    },
+    {
+        "nombre_completo": "Constanza Bravo Fuenzalida",
+        "direccion": "Calle Oriente 234",
+        "comuna": "Peñalolén",
+        "cajas_de_huevos_total": 120,
+        "cajas_de_huevos": 0
+    },
+    {
+        "rut": "14.765.332-8",
+        "nombre_completo": "Matías Lagos Reyes",
+        "direccion": "Av. Cordillera 300",
+        "comuna": "San Joaquín",
+        "cajas_de_huevos_total": 110,
+        "cajas_de_huevos": 0
+    },
+    {
+        "nombre_completo": "Valentina Torres Rojas",
+        "direccion": "Camino del Sol 123",
+        "comuna": "Puente Alto",
+        "cajas_de_huevos_total": 177,
+        "cajas_de_huevos": 0
+    },
+    {
+        "rut": "16.987.234-1",
+        "nombre_completo": "Cristóbal Figueroa Díaz",
+        "direccion": "Calle Los Álamos 900",
+        "comuna": "La Cisterna",
+        "cajas_de_huevos_total": 80,
+        "cajas_de_huevos": 0
+    },
+    {
+        "nombre_completo": "Antonia Correa Vargas",
+        "direccion": "Pasaje Central 76",
+        "comuna": "Santiago Centro",
+        "cajas_de_huevos_total": 190,
+        "cajas_de_huevos": 0
+    },
+    {
+        "rut": "19.123.678-5",
+        "nombre_completo": "Sebastián Carrasco Oyarzún",
+        "direccion": "Av. Los Leones 678",
+        "comuna": "Providencia",
+        "cajas_de_huevos_total": 155,
+        "cajas_de_huevos": 0
+    },
+    {
+        "nombre_completo": "Daniela Navarro Flores",
+        "direccion": "Calle Nueva 455",
+        "comuna": "Recoleta",
+        "cajas_de_huevos_total": 70,
+        "cajas_de_huevos": 0
+    },
+    {
+        "rut": "11.654.987-9",
+        "nombre_completo": "Tomás Aguilera Fuentes",
+        "direccion": "Camino Real 223",
+        "comuna": "La Granja",
+        "cajas_de_huevos_total": 130,
+        "cajas_de_huevos": 0
+    },
+    {
+        "nombre_completo": "Francisca Arancibia Prado",
+        "direccion": "Pasaje Sur 88",
+        "comuna": "Puente Alto",
+        "cajas_de_huevos_total": 210,
+        "cajas_de_huevos": 0
+    },
+    {
+        "rut": "20.111.555-6",
+        "nombre_completo": "Benjamín Paredes Díaz",
+        "direccion": "Calle Norte 100",
+        "comuna": "Macul",
+        "cajas_de_huevos_total": 95,
+        "cajas_de_huevos": 0
+    },
+    {
+        "nombre_completo": "Catalina Molina Peña",
+        "direccion": "Av. Las Torres 77",
+        "comuna": "Estación Central",
+        "cajas_de_huevos_total": 185,
+        "cajas_de_huevos": 0
+    },
+    {
+        "rut": "15.987.111-3",
+        "nombre_completo": "Gabriel Sáez Loyola",
+        "direccion": "Calle Oeste 333",
+        "comuna": "Cerro Navia",
+        "cajas_de_huevos_total": 197,
+        "cajas_de_huevos": 0
+    },
+    {
+        "nombre_completo": "Josefa Rojas Sepúlveda",
+        "direccion": "Av. Central 102",
+        "comuna": "La Pintana",
+        "cajas_de_huevos_total": 170,
+        "cajas_de_huevos": 0
+    },
+    {
+        "rut": "23.654.777-2",
+        "nombre_completo": "Martín Orellana Tapia",
+        "direccion": "Calle Los Cedros 901",
+        "comuna": "Maipú",
+        "cajas_de_huevos_total": 200,
+        "cajas_de_huevos": 0
+    },
+    {
+        "nombre_completo": "Trinidad Valdés Campos",
+        "direccion": "Camino Oriente 11",
+        "comuna": "Las Condes",
+        "cajas_de_huevos_total": 300,
+        "cajas_de_huevos": 0
+    },
+    {
+        "rut": "",
+        "nombre_completo": "Carlitos lechuga",
+        "direccion": "villa pirinoli 21",
+        "comuna": "Santiago",
+        "cajas_de_huevos_total": 89,
+        "cajas_de_huevos": 0
+    }
+]
