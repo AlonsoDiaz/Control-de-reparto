@@ -1,6 +1,6 @@
 import json
 import os
-import pandas as pd
+import unicodedata
 from datetime import datetime
 import openpyxl
 from openpyxl.styles import Font, Alignment
@@ -10,6 +10,12 @@ from tkinter import ttk, messagebox, simpledialog
 ARCHIVO = "db.json"
 
 # ------------------ Funciones base ------------------
+
+def normalizar(texto):
+    return ''.join(
+        c for c in unicodedata.normalize('NFD', texto.lower())
+        if unicodedata.category(c) != 'Mn'
+    )
 
 def cargar_datos():
     if not os.path.exists(ARCHIVO):
@@ -30,121 +36,35 @@ def guardar_datos(data):
     with open(ARCHIVO, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4, ensure_ascii=False)
 
-# ------------------ Funciones de negocio ------------------
-
-def agregar_cliente(data, nombre, direccion, comuna, rut="", cajas=0):
-    nuevo_cliente = {
-        "rut": rut,
-        "nombre_completo": nombre,
-        "direccion": direccion,
-        "comuna": comuna,
-        "cajas_de_huevos_total": cajas,
-        "cajas_de_huevos": cajas
-    }
-    data.append(nuevo_cliente)
-    guardar_datos(data)
-    return True
-
-def nuevo_pedido(data, nombre, cantidad):
-    for c in data:
-        if nombre.lower() == c["nombre_completo"].lower():
-            c["cajas_de_huevos"] += cantidad
-            c["cajas_de_huevos_total"] += cantidad
-            guardar_datos(data)
-            return True
-    return False
-
-def generar_reparto(data):
-    if not data:
-        messagebox.showwarning("Sin clientes", "No hay clientes registrados.")
-        return
-
-    # Preguntar si desea filtrar por comuna
-    filtrar = messagebox.askyesno("Filtro", "¿Desea filtrar el reparto por comuna?")
-    clientes_filtrados = data
-    comuna = None
-
-    if filtrar:
-        comuna = simpledialog.askstring("Filtrar por comuna", "Ingrese el nombre de la comuna:")
-        if not comuna:
-            messagebox.showwarning("Advertencia", "Debe ingresar una comuna válida.")
-            return
-        clientes_filtrados = [c for c in data if c["comuna"].lower() == comuna.lower()]
-        if not clientes_filtrados:
-            messagebox.showinfo("Sin resultados", f"No hay clientes en la comuna '{comuna}'.")
-            return
-
-    clientes_con_pedidos = [c for c in clientes_filtrados if c["cajas_de_huevos"] > 0]
-
-    if not clientes_con_pedidos:
-        messagebox.showinfo("Sin pedidos", "No hay pedidos pendientes para generar reparto.")
-        return
-
-    # Crear nombre de archivo con fecha y comuna (si aplica)
-    fecha_actual = datetime.now().strftime("%d-%m-%Y")
-    if comuna:
-        nombre_archivo = f"reparto_huevos_{comuna}_{fecha_actual}.xlsx"
-    else:
-        nombre_archivo = f"reparto_huevos_{fecha_actual}.xlsx"
-
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Reparto Huevos"
-
-    encabezados = ["Nombre completo", "RUT", "Dirección", "Comuna", "Cajas de huevos", "Metodo de pago", "Pagado si/no"]
-    ws.append(encabezados)
-    for cell in ws[1]:
-        cell.font = Font(bold=True)
-        cell.alignment = Alignment(horizontal="center")
-
-    for cliente in clientes_con_pedidos:
-        ws.append([
-            cliente["nombre_completo"],
-            cliente.get("rut", ""),
-            cliente["direccion"],
-            cliente["comuna"],
-            cliente["cajas_de_huevos"]
-        ])
-
-    # Ajustar ancho de columnas
-    for column in ws.columns:
-        max_length = 0
-        column = list(column)
-        for cell in column:
-            if cell.value:
-                max_length = max(max_length, len(str(cell.value)))
-        adjusted_width = (max_length + 2)
-        ws.column_dimensions[column[0].column_letter].width = adjusted_width
-
-    try:
-        wb.save(nombre_archivo)
-    except PermissionError:
-        messagebox.showerror("Error", f"No se pudo guardar el archivo '{nombre_archivo}'.\nCiérralo si está abierto e inténtalo de nuevo.")
-        return
-
-    # Restablecer pedidos solo después de guardar con éxito
-    for cliente in clientes_con_pedidos:
-        cliente["cajas_de_huevos"] = 0
-
-    guardar_datos(data)
-    messagebox.showinfo("Éxito", f"Archivo '{nombre_archivo}' generado y pedidos restablecidos.")
-
 # ------------------ Interfaz gráfica ------------------
 
 class App:
     def __init__(self, root):
         self.root = root
         self.root.title("📦 Control de Reparto de Huevos")
+        self.root.geometry("950x600")
+        self.root.configure(bg="#f9fafb")
+
+        style = ttk.Style()
+        style.theme_use("clam")
+        style.configure("Treeview.Heading", font=("Segoe UI", 10, "bold"), background="#e8ecf0")
+        style.configure("Treeview", font=("Segoe UI", 9), rowheight=24)
+
         self.data = cargar_datos()
 
-        frame = tk.Frame(root, padx=10, pady=10)
-        frame.pack()
+        frame = tk.Frame(root, padx=10, pady=10, bg="#f9fafb")
+        frame.pack(fill="both", expand=True)
 
-        tk.Button(frame, text="➕ Agregar cliente", width=20, command=self.ventana_agregar_cliente).grid(row=0, column=0, padx=5, pady=5)
-        tk.Button(frame, text="🥚 Nuevo pedido", width=20, command=self.ventana_nuevo_pedido).grid(row=0, column=1, padx=5, pady=5)
-        tk.Button(frame, text="📋 Ver clientes", width=20, command=self.ver_clientes).grid(row=0, column=2, padx=5, pady=5)
-        tk.Button(frame, text="📦 Generar reparto", width=20, command=lambda: generar_reparto(self.data)).grid(row=0, column=3, padx=5, pady=5)
-        tk.Button(frame, text="🚪 Salir", width=20, command=root.quit).grid(row=0, column=4, padx=5, pady=5)
+        tk.Label(frame, text="📋 Control de Reparto", font=("Segoe UI", 14, "bold"), bg="#f9fafb", fg="#333").grid(row=0, column=0, columnspan=5, pady=(0, 5))
+
+        botones = [
+            ("➕ Agregar cliente", self.ventana_agregar_cliente),
+            ("🥚 Nuevo pedido", self.ventana_nuevo_pedido),
+            ("📦 Generar reparto", self.generar_reparto),
+            ("🚪 Salir", root.quit)
+        ]
+        for i, (text, cmd) in enumerate(botones):
+            ttk.Button(frame, text=text, width=20, command=cmd).grid(row=1, column=i, padx=5, pady=5)
 
         self.tree = ttk.Treeview(
             frame,
@@ -153,20 +73,29 @@ class App:
             height=15
         )
 
-        
         for col in ("Nombre", "RUT", "Dirección", "Comuna", "Pendiente a entrega", "Total histórico"):
             self.tree.heading(col, text=col)
-            self.tree.column(col, width=150)
-        self.tree.grid(row=1, column=0, columnspan=5, pady=10)
+            self.tree.column(col, width=150, anchor="center")
+        self.tree.grid(row=2, column=0, columnspan=5, pady=10)
+
+        self.label_total = tk.Label(frame, text="", bg="#f9fafb", fg="#444", font=("Segoe UI", 10, "bold"))
+        self.label_total.grid(row=3, column=0, columnspan=5, pady=(5, 0))
+
+        tk.Label(frame, text="Versión 1.1.0", fg="#888", font=("Segoe UI", 9, "italic"), bg="#f9fafb").grid(row=4, column=0, columnspan=5, pady=(5, 0))
+
         self.ver_clientes()
 
-        tk.Label(frame, text="Versión 1.0.0", fg="gray", font=("Arial", 9, "italic")).grid(row=2, column=0, columnspan=5, pady=(5, 0))
-
+    # ------------------ Funciones principales ------------------
 
     def ver_clientes(self):
         for item in self.tree.get_children():
             self.tree.delete(item)
-        for c in self.data:
+
+        clientes_ordenados = sorted(self.data, key=lambda c: c["cajas_de_huevos"], reverse=True)
+        total_pendiente = 0
+
+        for c in clientes_ordenados:
+            total_pendiente += c["cajas_de_huevos"]
             self.tree.insert("", "end", values=(
                 c["nombre_completo"],
                 c.get("rut", ""),
@@ -176,67 +105,213 @@ class App:
                 c["cajas_de_huevos_total"]
             ))
 
+        self.label_total.config(text=f"🥚 Total de cajas pendientes a entrega: {total_pendiente}")
+
     def ventana_agregar_cliente(self):
         win = tk.Toplevel(self.root)
         win.title("Agregar Cliente")
-        win.geometry("300x300")
+        win.geometry("320x330")
+        win.resizable(False, False)
+        win.configure(bg="#f7f9fb")
+        self.centrar_ventana(win)
 
-        labels = ["Nombre completo", "RUT (opcional)", "Dirección", "Comuna", "Cajas iniciales"]
+        labels = [
+            ("Nombre completo", "Ej: Juan Pérez González"),
+            ("RUT (opcional)", "Ej: 12.345.678-9"),
+            ("Dirección", "Ej: Av. Los Leones 345"),
+            ("Comuna", "Ej: Las Condes"),
+            ("Cajas iniciales", "Ej: 5")
+        ]
+
         entries = []
-        for text in labels:
-            tk.Label(win, text=text).pack()
-            entry = tk.Entry(win)
+        for label_text, placeholder in labels:
+            tk.Label(win, text=label_text, bg="#f7f9fb").pack(pady=(6, 0))
+            entry = tk.Entry(win, width=35, fg="#777")
+            entry.insert(0, placeholder)
+
+            def on_focus_in(e, text=placeholder, ent=entry):
+                if ent.get() == text:
+                    ent.delete(0, "end")
+                    ent.config(fg="#000")
+
+            def on_focus_out(e, text=placeholder, ent=entry):
+                if not ent.get():
+                    ent.insert(0, text)
+                    ent.config(fg="#777")
+
+            entry.bind("<FocusIn>", on_focus_in)
+            entry.bind("<FocusOut>", on_focus_out)
             entry.pack()
-            entries.append(entry)
+            entries.append((entry, placeholder))
 
         def agregar():
             try:
-                nombre = entries[0].get().strip()
-                rut = entries[1].get().strip()
-                direccion = entries[2].get().strip()
-                comuna = entries[3].get().strip()
-                cajas = int(entries[4].get().strip() or 0)
-                if not nombre or not direccion or not comuna:
+                nombre = entries[0][0].get().strip()
+                rut = entries[1][0].get().strip()
+                direccion = entries[2][0].get().strip()
+                comuna = entries[3][0].get().strip()
+                cajas_str = entries[4][0].get().strip()
+                cajas = int(cajas_str) if cajas_str.isdigit() else 0
+
+                # Validación
+                if any(nombre == p or direccion == p or comuna == p for _, p in entries[:4]):
                     messagebox.showerror("Error", "Complete todos los campos obligatorios.")
                     return
-                agregar_cliente(self.data, nombre, direccion, comuna, rut, cajas)
+
+                self.data.append({
+                    "rut": rut if rut != entries[1][1] else "",
+                    "nombre_completo": nombre,
+                    "direccion": direccion,
+                    "comuna": comuna,
+                    "cajas_de_huevos_total": cajas,
+                    "cajas_de_huevos": cajas
+                })
+                guardar_datos(self.data)
                 self.ver_clientes()
                 win.destroy()
                 messagebox.showinfo("Éxito", "Cliente agregado con éxito.")
             except ValueError:
                 messagebox.showerror("Error", "Ingrese un número válido para cajas.")
 
-        tk.Button(win, text="Guardar", command=agregar).pack(pady=10)
+        ttk.Button(win, text="Guardar", command=agregar).pack(pady=15)
 
     def ventana_nuevo_pedido(self):
         win = tk.Toplevel(self.root)
         win.title("Nuevo Pedido")
-        win.geometry("300x200")
+        win.geometry("380x360")
+        win.resizable(False, False)
+        win.configure(bg="#f7f9fb")
+        self.centrar_ventana(win)
 
-        tk.Label(win, text="Nombre del cliente:").pack()
-        entry_nombre = tk.Entry(win)
-        entry_nombre.pack()
+        tk.Label(win, text="Buscar cliente (nombre o RUT):", bg="#f7f9fb").pack(pady=(10, 0))
+        entry_buscar = tk.Entry(win, width=40, fg="#777")
+        entry_buscar.insert(0, "Ej: María González o 12.345.678-9")
 
-        tk.Label(win, text="Cantidad de cajas a agregar:").pack()
-        entry_cantidad = tk.Entry(win)
+        def on_focus_in(e):
+            if entry_buscar.get() == "Ej: María González o 12.345.678-9":
+                entry_buscar.delete(0, "end")
+                entry_buscar.config(fg="#000")
+
+        def on_focus_out(e):
+            if not entry_buscar.get():
+                entry_buscar.insert(0, "Ej: María González o 12.345.678-9")
+                entry_buscar.config(fg="#777")
+
+        entry_buscar.bind("<FocusIn>", on_focus_in)
+        entry_buscar.bind("<FocusOut>", on_focus_out)
+        entry_buscar.pack(pady=5)
+
+        listbox = tk.Listbox(win, height=6, width=50)
+        listbox.pack(pady=5)
+        resultados = []
+
+        def buscar(event=None):
+            listbox.delete(0, tk.END)
+            texto = normalizar(entry_buscar.get().strip())
+            if not texto or texto.startswith("ej:"):
+                return
+            resultados.clear()
+            for c in self.data:
+                if texto in normalizar(c["nombre_completo"]) or texto in normalizar(c.get("rut", "")):
+                    resultados.append(c)
+                    listbox.insert(tk.END, f"{c['nombre_completo']} ({c.get('rut', '')}) - {c['comuna']}")
+
+        entry_buscar.bind("<KeyRelease>", buscar)
+
+        tk.Label(win, text="Cantidad de cajas a agregar:", bg="#f7f9fb").pack(pady=(10, 0))
+        entry_cantidad = tk.Entry(win, width=15, fg="#777")
+        entry_cantidad.insert(0, "Ej: 10")
+        entry_cantidad.bind("<FocusIn>", lambda e: entry_cantidad.delete(0, "end") if entry_cantidad.get() == "Ej: 10" else None)
+        entry_cantidad.bind("<FocusOut>", lambda e: entry_cantidad.insert(0, "Ej: 10") if not entry_cantidad.get() else None)
         entry_cantidad.pack()
 
-        def agregar_pedido():
-            nombre = entry_nombre.get().strip()
+        def agregar():
             try:
+                sel = listbox.curselection()
+                if not sel:
+                    messagebox.showerror("Error", "Seleccione un cliente.")
+                    return
+                cliente = resultados[sel[0]]
                 cantidad = int(entry_cantidad.get().strip())
+                cliente["cajas_de_huevos"] += cantidad
+                cliente["cajas_de_huevos_total"] += cantidad
+                guardar_datos(self.data)
+                self.ver_clientes()
+                messagebox.showinfo("Éxito", f"Se agregaron {cantidad} cajas a {cliente['nombre_completo']}.")
+                win.destroy()
             except ValueError:
-                messagebox.showerror("Error", "Ingrese un número válido.")
+                messagebox.showerror("Error", "Ingrese una cantidad válida.")
+
+        ttk.Button(win, text="Agregar pedido", command=agregar).pack(pady=10)
+
+    def generar_reparto(self):
+        if not self.data:
+            messagebox.showwarning("Sin clientes", "No hay clientes registrados.")
+            return
+
+        filtrar = messagebox.askyesno("Filtro", "¿Desea filtrar el reparto por comuna?")
+        clientes_filtrados = self.data
+        comuna = None
+
+        if filtrar:
+            comuna = simpledialog.askstring("Filtrar por comuna", "Ingrese el nombre de la comuna:")
+            if not comuna:
+                messagebox.showwarning("Advertencia", "Debe ingresar una comuna válida.")
+                return
+            clientes_filtrados = [c for c in self.data if normalizar(c["comuna"]) == normalizar(comuna)]
+            if not clientes_filtrados:
+                messagebox.showinfo("Sin resultados", f"No hay clientes en la comuna '{comuna}'.")
                 return
 
-            if nuevo_pedido(self.data, nombre, cantidad):
-                self.ver_clientes()
-                messagebox.showinfo("Éxito", f"Pedido agregado a {nombre}.")
-                win.destroy()
-            else:
-                messagebox.showerror("Error", f"No se encontró el cliente '{nombre}'.")
+        clientes_con_pedidos = [c for c in clientes_filtrados if c["cajas_de_huevos"] > 0]
+        if not clientes_con_pedidos:
+            messagebox.showinfo("Sin pedidos", "No hay pedidos pendientes para generar reparto.")
+            return
 
-        tk.Button(win, text="Agregar", command=agregar_pedido).pack(pady=10)
+        fecha_actual = datetime.now().strftime("%d-%m-%Y")
+        nombre_archivo = f"reparto_huevos_{comuna or 'general'}_{fecha_actual}.xlsx".replace(" ", "_")
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Reparto Huevos"
+
+        encabezados = ["Nombre completo", "RUT", "Dirección", "Comuna", "Cajas de huevos", "Método de pago", "Pagado (Sí/No)"]
+        ws.append(encabezados)
+        for cell in ws[1]:
+            cell.font = Font(bold=True)
+            cell.alignment = Alignment(horizontal="center")
+
+        for cliente in clientes_con_pedidos:
+            ws.append([
+                cliente["nombre_completo"],
+                cliente.get("rut", ""),
+                cliente["direccion"],
+                cliente["comuna"],
+                cliente["cajas_de_huevos"]
+            ])
+
+        for column in ws.columns:
+            max_length = max(len(str(cell.value)) if cell.value else 0 for cell in column)
+            ws.column_dimensions[column[0].column_letter].width = max_length + 2
+
+        wb.save(nombre_archivo)
+
+        # Resetear pedidos
+        for cliente in clientes_con_pedidos:
+            cliente["cajas_de_huevos"] = 0
+
+        guardar_datos(self.data)
+        self.ver_clientes()
+
+        messagebox.showinfo("Éxito", f"Archivo '{nombre_archivo}' generado correctamente.\nPedidos actualizados.")
+
+    def centrar_ventana(self, win):
+        win.update_idletasks()
+        width = win.winfo_width()
+        height = win.winfo_height()
+        x = (win.winfo_screenwidth() // 2) - (width // 2)
+        y = (win.winfo_screenheight() // 2) - (height // 2)
+        win.geometry(f"+{x}+{y}")
 
 # ------------------ Ejecución ------------------
 

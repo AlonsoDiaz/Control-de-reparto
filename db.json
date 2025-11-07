@@ -4,7 +4,7 @@
         "nombre_completo": "Juan Pérez González",
         "direccion": "Av. Los Olivos 123",
         "comuna": "Santiago",
-        "cajas_de_huevos_total": 120,
+        "cajas_de_huevos_total": 166,
         "cajas_de_huevos": 0
     },
     {
@@ -27,14 +27,14 @@
         "nombre_completo": "Ana Torres Silva",
         "direccion": "Camino El Bosque 145",
         "comuna": "La Florida",
-        "cajas_de_huevos_total": 237,
+        "cajas_de_huevos_total": 240,
         "cajas_de_huevos": 0
     },
     {
         "nombre_completo": "Pedro Ramírez Soto",
         "direccion": "Av. Independencia 999",
         "comuna": "Santiago",
-        "cajas_de_huevos_total": 220,
+        "cajas_de_huevos_total": 252,
         "cajas_de_huevos": 0
     },
     {
@@ -42,8 +42,8 @@
         "nombre_completo": "Lucía Herrera Vidal",
         "direccion": "Los Alerces 12",
         "comuna": "Puente Alto",
-        "cajas_de_huevos_total": 150,
-        "cajas_de_huevos": 0
+        "cajas_de_huevos_total": 206,
+        "cajas_de_huevos": 33
     },
     {
         "rut": "17.234.876-4",
@@ -125,7 +125,7 @@
         "nombre_completo": "Matías Lagos Reyes",
         "direccion": "Av. Cordillera 300",
         "comuna": "San Joaquín",
-        "cajas_de_huevos_total": 110,
+        "cajas_de_huevos_total": 154,
         "cajas_de_huevos": 0
     },
     {
@@ -192,7 +192,7 @@
         "nombre_completo": "Catalina Molina Peña",
         "direccion": "Av. Las Torres 77",
         "comuna": "Estación Central",
-        "cajas_de_huevos_total": 185,
+        "cajas_de_huevos_total": 187,
         "cajas_de_huevos": 0
     },
     {
@@ -215,7 +215,7 @@
         "nombre_completo": "Martín Orellana Tapia",
         "direccion": "Calle Los Cedros 901",
         "comuna": "Maipú",
-        "cajas_de_huevos_total": 200,
+        "cajas_de_huevos_total": 221,
         "cajas_de_huevos": 0
     },
     {
@@ -231,6 +231,22 @@
         "direccion": "villa pirinoli 21",
         "comuna": "Santiago",
         "cajas_de_huevos_total": 89,
+        "cajas_de_huevos": 0
+    },
+    {
+        "rut": "2",
+        "nombre_completo": "prueba",
+        "direccion": "los lagos 231",
+        "comuna": "santiago",
+        "cajas_de_huevos_total": 1231231,
+        "cajas_de_huevos": 0
+    },
+    {
+        "rut": "|",
+        "nombre_completo": "juan",
+        "direccion": "adwa",
+        "comuna": "viña del mar",
+        "cajas_de_huevos_total": 0,
         "cajas_de_huevos": 0
     }
 ]
