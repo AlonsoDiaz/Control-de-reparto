@@ -10,6 +10,7 @@ from tkinter import ttk, messagebox, simpledialog
 ARCHIVO = "db.json"
 
 PRECIO_CAJA = 1000  # 🔹 Precio inicial de la bandeja de huevos
+DEFAULT_CAJA_MANUAL = {}
 
 # ------------------ Funciones base ------------------
 
@@ -21,7 +22,13 @@ def normalizar(texto):
 
 def cargar_datos():
     if not os.path.exists(ARCHIVO):
-        return {"clientes": [], "precio_caja": PRECIO_CAJA, "precios_por_comuna": {}}
+        return {
+            "clientes": [],
+            "precio_caja": PRECIO_CAJA,
+            "precios_por_comuna": {},
+            "movimientos": [],
+            "caja_manual": DEFAULT_CAJA_MANUAL.copy()
+        }
     try:
         with open(ARCHIVO, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -31,10 +38,18 @@ def cargar_datos():
             data.setdefault("clientes", [])
             data.setdefault("precio_caja", PRECIO_CAJA)
             data.setdefault("precios_por_comuna", {})
+            data.setdefault("movimientos", [])
+            data["caja_manual"] = {}
             return data
     except (json.JSONDecodeError, ValueError, IOError):
         messagebox.showerror("Error", "El archivo de datos está corrupto o tiene un formato incorrecto. Se restablecerán los valores predeterminados.")
-        return {"clientes": [], "precio_caja": PRECIO_CAJA, "precios_por_comuna": {}}
+        return {
+            "clientes": [],
+            "precio_caja": PRECIO_CAJA,
+            "precios_por_comuna": {},
+            "movimientos": [],
+            "caja_manual": DEFAULT_CAJA_MANUAL.copy()
+        }
 
 def guardar_datos(data):
     # Cargar los datos existentes para preservar las claves
@@ -61,6 +76,8 @@ class App:
         datos_cargados = cargar_datos()
         self.data = datos_cargados.get("clientes", [])
         self.precios_por_comuna = datos_cargados.get("precios_por_comuna", {})
+        self.movimientos = datos_cargados.get("movimientos", [])
+        self.caja_manual = dict(datos_cargados.get("caja_manual", {}))
         global PRECIO_CAJA
         PRECIO_CAJA = datos_cargados.get("precio_caja", PRECIO_CAJA)
 
@@ -69,21 +86,23 @@ class App:
 
         tk.Label(frame, text="📋 Control de Reparto", font=("Segoe UI", 18, "bold"), bg="#f0f4f8", fg="#003366").pack(pady=(0, 12))
 
-        botones_frame = tk.Frame(frame, bg="#f0f4f8")  # 🔹 Contenedor para los botones
-        botones_frame.pack(fill="x", pady=8)
+        botones_frame = tk.Frame(frame, bg="#f0f4f8")
+        botones_frame.pack(pady=12)
 
         botones = [
             ("➕ Agregar cliente", self.ventana_agregar_cliente),
-            ("✏️ Editar", self.ventana_editar),
             ("🥚 Nuevo pedido", self.ventana_nuevo_pedido),
-            ("📊 Ver resumen", self.ventana_resumen),
-            ("💲 Cambiar precio", self.cambiar_precio_caja),  # 🔹 Nuevo botón para cambiar el precio
+            ("✏️ Editar", self.ventana_editar),
             ("📦 Generar reparto", self.generar_reparto),
-            ("🚪 Salir", root.quit),
-            ("🏘️ Gestionar Precios", self.gestionar_precios_por_comuna)  # 🔹 Botón para gestionar precios por comuna
+            ("📊 Ver resumen", self.ventana_resumen),
+            ("🏘️ Gestionar Precios", self.gestionar_precios_por_comuna),
+            ("💲 Cambiar precio", self.cambiar_precio_caja),
+            ("💰 Gestión de Caja", self.ventana_caja),
+            ("🚪 Salir", root.quit)
         ]
+
         for text, cmd in botones:
-            ttk.Button(botones_frame, text=text, command=cmd).pack(side="left", padx=6, pady=6, expand=True)  # 🔹 Botones distribuidos horizontalmente
+            ttk.Button(botones_frame, text=text, command=cmd, width=20).pack(side="left", padx=6)
 
         self.tree = ttk.Treeview(
             frame,
@@ -101,7 +120,7 @@ class App:
         self.label_total = tk.Label(frame, text="", bg="#f0f4f8", fg="#003366", font=("Segoe UI", 12, "bold"))
         self.label_total.pack(pady=(8, 0))
 
-        tk.Label(frame, text="Versión 1.2.0", fg="#888", font=("Segoe UI", 10, "italic"), bg="#f0f4f8").pack(pady=(8, 0))
+        tk.Label(frame, text="Versión 1.3.0", fg="#888", font=("Segoe UI", 10, "italic"), bg="#f0f4f8").pack(pady=(8, 0))
 
         self.ver_clientes()
 
@@ -147,19 +166,293 @@ class App:
         self.label_total.config(text=f"🥚 Total de cajas pendientes a entrega: {total_pendiente}")
         self.label_total.pack(pady=(8, 0))
 
+    def aplicar_placeholder(self, entry, placeholder_text, color_placeholder="#777", color_text="#000"):
+        entry._placeholder_text = placeholder_text
+        entry._placeholder_color = color_placeholder
+        entry._text_color = color_text
+
+        def on_focus_in(_):
+            if entry.get() == placeholder_text and entry.cget("fg") == color_placeholder:
+                entry.delete(0, tk.END)
+                entry.config(fg=color_text)
+
+        def on_focus_out(_):
+            if not entry.get():
+                entry.insert(0, placeholder_text)
+                entry.config(fg=color_placeholder)
+
+        entry.bind("<FocusIn>", on_focus_in, add="+")
+        entry.bind("<FocusOut>", on_focus_out, add="+")
+
+        if not entry.get():
+            entry.insert(0, placeholder_text)
+            entry.config(fg=color_placeholder)
+        else:
+            entry.config(fg=color_text)
+
+    def obtener_valor_entry(self, entry):
+        placeholder_text = getattr(entry, "_placeholder_text", None)
+        placeholder_color = getattr(entry, "_placeholder_color", None)
+        valor = entry.get().strip()
+        if placeholder_text is not None and valor == placeholder_text and entry.cget("fg") == placeholder_color:
+            return ""
+        return valor
+
+    def guardar_estado(self):
+        guardar_datos({
+            "clientes": self.data,
+            "precio_caja": PRECIO_CAJA,
+            "precios_por_comuna": self.precios_por_comuna,
+            "movimientos": self.movimientos,
+            "caja_manual": self.caja_manual
+        })
+
+    def ventana_caja(self):
+        win = tk.Toplevel(self.root)
+        win.title("Gestión de Caja")
+        win.geometry("600x600")
+        win.configure(bg="#f7f9fb")
+        self.centrar_ventana(win)
+
+        tk.Label(win, text="💰 Gestión de caja", bg="#f7f9fb", font=("Segoe UI", 14, "bold")).pack(pady=(10, 8))
+
+        def formato_moneda(valor):
+            try:
+                return f"${float(valor):,.0f}".replace(",", ".")
+            except (TypeError, ValueError):
+                return "$0"
+
+        resumen_label = tk.Label(win, text="", bg="#f7f9fb", font=("Segoe UI", 11))
+        resumen_label.pack(pady=(0, 4))
+        saldo_label = tk.Label(win, text="", bg="#f7f9fb", font=("Segoe UI", 11, "bold"))
+        saldo_label.pack(pady=(0, 10))
+
+        def calcular_totales():
+            ingresos = egresos = otros = 0.0
+            for mov in self.movimientos:
+                tipo = (mov.get("tipo") or "").strip().lower()
+                try:
+                    monto = float(mov.get("monto", 0) or 0)
+                except (TypeError, ValueError):
+                    monto = 0.0
+                if tipo == "ingreso":
+                    ingresos += monto
+                elif tipo == "egreso":
+                    egresos += monto
+                else:
+                    otros += monto
+            return ingresos, egresos, otros
+
+        def actualizar_resumen():
+            ingresos, egresos, otros = calcular_totales()
+            resumen_label.config(
+                text=(
+                    f"Ingresos: {formato_moneda(ingresos)}   •   "
+                    f"Egresos: {formato_moneda(egresos)}   •   "
+                    f"Otros: {formato_moneda(otros)}"
+                )
+            )
+            saldo_neto = ingresos - egresos
+            saldo_label.config(text=f"Saldo neto (ingresos - egresos): {formato_moneda(saldo_neto)}")
+
+        ttk.Separator(win, orient="horizontal").pack(fill="x", padx=14, pady=(4, 10))
+        tk.Label(win, text="Registros guardados", bg="#f7f9fb", font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=18)
+
+        tree_frame = tk.Frame(win, bg="#f7f9fb")
+        tree_frame.pack(fill="both", expand=True, padx=12, pady=(6, 4))
+        columnas = ("Fecha", "Tipo", "Monto", "Descripción", "Referencia")
+        tree = ttk.Treeview(tree_frame, columns=columnas, show="headings", height=8)
+        for col in columnas:
+            tree.heading(col, text=col)
+            ancho = 120 if col in ("Fecha", "Tipo", "Monto") else 220
+            tree.column(col, width=ancho, anchor="center" if col != "Descripción" else "w")
+        tree.column("Descripción", anchor="w")
+        tree.column("Referencia", anchor="w")
+
+        scrollbar = ttk.Scrollbar(tree_frame, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=scrollbar.set)
+        tree.grid(row=0, column=0, sticky="nsew")
+        scrollbar.grid(row=0, column=1, sticky="ns")
+        tree_frame.columnconfigure(0, weight=1)
+        tree_frame.rowconfigure(0, weight=1)
+
+        label_resumen_registros = tk.Label(win, text="Registros guardados: 0", bg="#f7f9fb", font=("Segoe UI", 10))
+        label_resumen_registros.pack(anchor="w", padx=18, pady=(0, 6))
+
+        id_to_index = {}
+
+        def refrescar_registros():
+            id_to_index.clear()
+            tree.delete(*tree.get_children())
+            if not self.movimientos:
+                label_resumen_registros.config(text="Registros guardados: 0")
+                actualizar_resumen()
+                return
+
+            movimientos_ordenados = sorted(
+                enumerate(self.movimientos),
+                key=lambda par: par[1].get("fecha_iso", par[1].get("fecha", ""))
+            )
+
+            se_actualizo = False
+            for idx_original, mov in movimientos_ordenados:
+                if not mov.get("id"):
+                    mov["id"] = datetime.now().strftime("%Y%m%d%H%M%S%f")
+                    self.movimientos[idx_original] = mov
+                    se_actualizo = True
+
+                mov_id = mov.get("id")
+                id_to_index[mov_id] = idx_original
+                monto_valor = mov.get("monto", 0)
+                descripcion = mov.get("descripcion", "")
+                referencia = mov.get("metodo") or mov.get("cliente") or mov.get("referencia") or ""
+
+                tree.insert(
+                    "",
+                    "end",
+                    iid=mov_id,
+                    values=(
+                        mov.get("fecha", ""),
+                        mov.get("tipo", ""),
+                        formato_moneda(monto_valor),
+                        descripcion,
+                        referencia
+                    )
+                )
+
+            label_resumen_registros.config(text=f"Registros guardados: {len(self.movimientos)}")
+            if se_actualizo:
+                self.guardar_estado()
+            actualizar_resumen()
+
+        def agregar_registro():
+            self.abrir_formulario_registro(refrescar_registros)
+
+        def eliminar_registro():
+            sel = tree.selection()
+            if not sel:
+                messagebox.showerror("Error", "Selecciona un registro para eliminar.")
+                return
+            item_id = sel[0]
+            if not messagebox.askyesno("Confirmar", "¿Eliminar el registro seleccionado?"):
+                return
+            idx_original = id_to_index.get(item_id)
+            if idx_original is None or idx_original >= len(self.movimientos):
+                messagebox.showerror("Error", "No se encontró el registro seleccionado.")
+                return
+            del self.movimientos[idx_original]
+            self.guardar_estado()
+            refrescar_registros()
+            messagebox.showinfo("Éxito", "Registro eliminado correctamente.")
+
+        registros_btn_frame = tk.Frame(win, bg="#f7f9fb")
+        registros_btn_frame.pack(pady=(0, 10))
+        ttk.Button(registros_btn_frame, text="Agregar registro", command=agregar_registro).grid(row=0, column=0, padx=6)
+        ttk.Button(registros_btn_frame, text="Eliminar seleccionado", command=eliminar_registro).grid(row=0, column=1, padx=6)
+        ttk.Button(registros_btn_frame, text="Cerrar", command=win.destroy).grid(row=0, column=2, padx=6)
+
+        refrescar_registros()
+
+    def abrir_formulario_registro(self, callback_refresco):
+        win = tk.Toplevel(self.root)
+        win.title("Nuevo registro de caja")
+        win.geometry("360x360")
+        win.configure(bg="#f7f9fb")
+        self.centrar_ventana(win)
+
+        tk.Label(win, text="Registrar movimiento manual", bg="#f7f9fb", font=("Segoe UI", 13, "bold")).pack(pady=(10, 10))
+
+        tk.Label(win, text="Tipo de registro:", bg="#f7f9fb").pack(anchor="w", padx=18)
+        tipos = ["Ingreso", "Egreso", "Otro"]
+        combo_tipo = ttk.Combobox(win, state="readonly", values=tipos, width=18)
+        combo_tipo.pack(pady=(0, 8))
+        combo_tipo.current(0)
+
+        tk.Label(win, text="Fecha (dd-mm-aaaa hh:mm):", bg="#f7f9fb").pack(anchor="w", padx=18)
+        entry_fecha = tk.Entry(win, width=24, font=("Segoe UI", 10))
+        fecha_actual = datetime.now().strftime("%d-%m-%Y %H:%M")
+        entry_fecha.insert(0, fecha_actual)
+        entry_fecha.pack(pady=(0, 8))
+
+        tk.Label(win, text="Monto:", bg="#f7f9fb").pack(anchor="w", padx=18)
+        entry_monto = tk.Entry(win, width=18, font=("Segoe UI", 10))
+        entry_monto.pack(pady=(0, 8))
+        self.aplicar_placeholder(entry_monto, "Ej: 25000")
+
+        tk.Label(win, text="Descripción (opcional):", bg="#f7f9fb").pack(anchor="w", padx=18)
+        entry_descripcion = tk.Entry(win, width=32, font=("Segoe UI", 10))
+        entry_descripcion.pack(pady=(0, 8))
+        self.aplicar_placeholder(entry_descripcion, "Ej: Venta en feria")
+
+        tk.Label(win, text="Referencia / Método (opcional):", bg="#f7f9fb").pack(anchor="w", padx=18)
+        entry_referencia = tk.Entry(win, width=32, font=("Segoe UI", 10))
+        entry_referencia.pack(pady=(0, 12))
+        self.aplicar_placeholder(entry_referencia, "Ej: Transferencia BancoEstado")
+
+        def guardar_registro():
+            tipo = combo_tipo.get() or "Otro"
+            monto_texto = self.obtener_valor_entry(entry_monto)
+            if not monto_texto:
+                messagebox.showerror("Error", "Ingresa un monto para el registro.")
+                return
+            monto_limpio = monto_texto.replace(" ", "").replace("$", "").replace(".", "").replace(",", ".")
+            try:
+                monto = float(monto_limpio)
+            except ValueError:
+                messagebox.showerror("Error", "El monto debe ser numérico.")
+                return
+            if monto <= 0:
+                messagebox.showerror("Error", "El monto debe ser mayor a 0.")
+                return
+
+            fecha_texto = self.obtener_valor_entry(entry_fecha) or fecha_actual
+            try:
+                fecha_iso = datetime.strptime(fecha_texto, "%d-%m-%Y %H:%M").isoformat()
+            except ValueError:
+                messagebox.showwarning("Advertencia", "Formato de fecha inválido. Se usará la fecha actual.")
+                fecha_texto = datetime.now().strftime("%d-%m-%Y %H:%M")
+                fecha_iso = datetime.now().isoformat()
+            descripcion = self.obtener_valor_entry(entry_descripcion)
+            referencia = self.obtener_valor_entry(entry_referencia)
+
+            registro = {
+                "id": datetime.now().strftime("%Y%m%d%H%M%S%f"),
+                "fecha": fecha_texto,
+                "fecha_iso": fecha_iso,
+                "tipo": tipo,
+                "monto": round(monto, 2),
+                "descripcion": descripcion,
+                "referencia": referencia
+            }
+
+            self.movimientos.append(registro)
+            self.guardar_estado()
+            callback_refresco()
+            messagebox.showinfo("Éxito", "Registro guardado correctamente.")
+            win.destroy()
+
+        botones = tk.Frame(win, bg="#f7f9fb")
+        botones.pack(pady=(6, 10))
+        ttk.Button(botones, text="Guardar", command=guardar_registro).grid(row=0, column=0, padx=6)
+        ttk.Button(botones, text="Cancelar", command=win.destroy).grid(row=0, column=1, padx=6)
+
     # ------------------ Cambiar precio de la caja ------------------
 
     def cambiar_precio_caja(self):
         def guardar_precio():
             try:
-                nuevo_precio = int(entry_precio.get().strip())
+                valor_ingresado = self.obtener_valor_entry(entry_precio)
+                if not valor_ingresado:
+                    messagebox.showerror("Error", "Ingrese un número válido.")
+                    return
+                nuevo_precio = int(valor_ingresado)
                 if nuevo_precio <= 0:
                     messagebox.showerror("Error", "El precio debe ser mayor a 0.")
                     return
                 global PRECIO_CAJA
                 PRECIO_CAJA = nuevo_precio
                 # Guardar el nuevo precio en los datos
-                guardar_datos({"clientes": self.data, "precio_caja": PRECIO_CAJA})
+                self.guardar_estado()
                 self.ver_clientes()  # 🔹 Actualizar la tabla con el nuevo precio
                 win.destroy()
                 messagebox.showinfo("Éxito", f"El precio de la bandeja se actualizó a ${PRECIO_CAJA}.")
@@ -177,6 +470,7 @@ class App:
 
         entry_precio = tk.Entry(win, width=20, font=("Segoe UI", 10))
         entry_precio.pack(pady=6)
+        self.aplicar_placeholder(entry_precio, "Ej: 7000")
 
         ttk.Button(win, text="Guardar", command=guardar_precio).pack(pady=10)
 
@@ -184,11 +478,11 @@ class App:
 
     def ventana_agregar_cliente(self):
         def guardar_cliente():
-            nombre = entry_nombre.get().strip()
-            telefono = entry_telefono.get().strip()
-            direccion = entry_direccion.get().strip()
-            comuna = entry_comuna.get().strip()
-            dia_reparto = entry_dia_reparto.get().strip()  # Nuevo campo para día de reparto
+            nombre = self.obtener_valor_entry(entry_nombre)
+            telefono = self.obtener_valor_entry(entry_telefono)
+            direccion = self.obtener_valor_entry(entry_direccion)
+            comuna = self.obtener_valor_entry(entry_comuna)
+            dia_reparto = self.obtener_valor_entry(entry_dia_reparto)  # Nuevo campo para día de reparto
 
             if not nombre or not telefono or not direccion or not comuna:
                 messagebox.showerror("Error", "Todos los campos excepto el día de reparto son obligatorios.")
@@ -205,10 +499,7 @@ class App:
             }
 
             self.data.append(nuevo_cliente)
-            # Cargar los datos existentes para preservar las claves
-            datos_existentes = cargar_datos()
-            datos_existentes["clientes"] = self.data  # Actualizar solo la lista de clientes
-            guardar_datos(datos_existentes)
+            self.guardar_estado()
             self.ver_clientes()
             win.destroy()
             messagebox.showinfo("Éxito", "Cliente agregado correctamente.")
@@ -224,22 +515,27 @@ class App:
         tk.Label(win, text="Nombre Completo:", bg="#f7f9fb", font=("Segoe UI", 10)).pack(anchor="w", padx=20)
         entry_nombre = tk.Entry(win, width=30, font=("Segoe UI", 10))
         entry_nombre.pack(pady=5)
+        self.aplicar_placeholder(entry_nombre, "Ej: Juan Pérez")
 
         tk.Label(win, text="Teléfono:", bg="#f7f9fb", font=("Segoe UI", 10)).pack(anchor="w", padx=20)
         entry_telefono = tk.Entry(win, width=30, font=("Segoe UI", 10))
         entry_telefono.pack(pady=5)
+        self.aplicar_placeholder(entry_telefono, "Ej: 912345678")
 
         tk.Label(win, text="Dirección:", bg="#f7f9fb", font=("Segoe UI", 10)).pack(anchor="w", padx=20)
         entry_direccion = tk.Entry(win, width=30, font=("Segoe UI", 10))
         entry_direccion.pack(pady=5)
+        self.aplicar_placeholder(entry_direccion, "Ej: Av. Siempre Viva 742")
 
         tk.Label(win, text="Comuna:", bg="#f7f9fb", font=("Segoe UI", 10)).pack(anchor="w", padx=20)
         entry_comuna = tk.Entry(win, width=30, font=("Segoe UI", 10))
         entry_comuna.pack(pady=5)
+        self.aplicar_placeholder(entry_comuna, "Ej: Maipú")
 
         tk.Label(win, text="Día de Reparto (opcional):", bg="#f7f9fb", font=("Segoe UI", 10)).pack(anchor="w", padx=20)  # Etiqueta para el nuevo campo
         entry_dia_reparto = tk.Entry(win, width=30, font=("Segoe UI", 10))
         entry_dia_reparto.pack(pady=5)  # Campo de entrada para el día de reparto
+        self.aplicar_placeholder(entry_dia_reparto, "Ej: Lunes")
 
         ttk.Button(win, text="Guardar", command=guardar_cliente).pack(pady=20)
 
@@ -254,16 +550,14 @@ class App:
         self.centrar_ventana(win)
 
         tk.Label(win, text="Buscar cliente (nombre o telefono):", bg="#f7f9fb").pack(pady=(10, 0))
-        # Corregir y asegurar que el campo de búsqueda sea visible y funcional
-        entry_buscar = tk.Entry(win, width=44, fg="#000")
-        entry_buscar.insert(0, "Ej: María González o 912345678")
-        entry_buscar.bind("<FocusIn>", lambda e: entry_buscar.delete(0, "end") if entry_buscar.get().startswith("Ej") else None)
-        entry_buscar.bind("<FocusOut>", lambda e: entry_buscar.insert(0, "Ej: María González o 912345678") if not entry_buscar.get() else None)
-        entry_buscar.pack(pady=(10, 5))  # Ajustar margen superior e inferior
+        entry_buscar = tk.Entry(win, width=44, font=("Segoe UI", 10))
+        entry_buscar.pack(pady=(10, 5))
+        self.aplicar_placeholder(entry_buscar, "Ej: María González o 912345678")
 
         tk.Label(win, text="Cantidad de cajas a agregar:", bg="#f7f9fb").pack(pady=(10, 0))
-        entry_cantidad = tk.Entry(win, width=18, fg="#000")
+        entry_cantidad = tk.Entry(win, width=18, font=("Segoe UI", 10))
         entry_cantidad.pack(pady=6)
+        self.aplicar_placeholder(entry_cantidad, "Ej: 10")
 
         # Crear listbox para mostrar resultados de búsqueda
         listbox = tk.Listbox(win, height=10, width=50)
@@ -273,11 +567,7 @@ class App:
 
         # Actualizar resultados en tiempo real mientras se escribe
         def actualizar_resultados(event):
-            valor_busqueda = entry_buscar.get().strip()
-            if valor_busqueda.startswith("Ej:" ):
-                query = ""
-            else:
-                query = valor_busqueda.lower()
+            query = self.obtener_valor_entry(entry_buscar).lower()
             listbox.delete(0, tk.END)
             resultados.clear()
             for cliente in self.data:
@@ -307,7 +597,7 @@ class App:
 
                 cliente = resultados[sel[0]]
 
-                cantidad_texto = entry_cantidad.get().strip()
+                cantidad_texto = self.obtener_valor_entry(entry_cantidad)
                 if not cantidad_texto:
                     messagebox.showerror("Error", "El campo de cantidad no puede estar vacío.")
                     return
@@ -321,9 +611,7 @@ class App:
                     return
                 cliente["cajas_de_huevos"] = cliente.get("cajas_de_huevos", 0) + cantidad
                 cliente["cajas_de_huevos_total"] = cliente.get("cajas_de_huevos_total", 0) + cantidad
-                datos_existentes = cargar_datos()
-                datos_existentes["clientes"] = self.data
-                guardar_datos(datos_existentes)
+                self.guardar_estado()
                 self.ver_clientes()
                 messagebox.showinfo("Éxito", f"Se agregaron {cantidad} cajas a {cliente.get('nombre_completo','')}.")
                 win.destroy()
@@ -342,28 +630,9 @@ class App:
         self.centrar_ventana(win)
 
         tk.Label(win, text="Buscar cliente (nombre o telefono):", bg="#f7f9fb").pack(pady=(10, 0))
-        entry_buscar = tk.Entry(win, width=46, fg="#777")
-        entry_buscar.insert(0, "Ej: Juan Pérez o 12.345.678-9")
-
-        def on_focus_in(e):
-            if entry_buscar.get().startswith("Ej"):
-                entry_buscar.delete(0, "end")
-                entry_buscar.config(fg="#000")
-
-        def on_focus_out(e):
-            if not entry_buscar.get():
-                entry_buscar.insert(0, "Ej: Juan Pérez o 12.345.678-9")
-                entry_buscar.config(fg="#777")
-
-        entry_buscar.bind("<FocusIn>", on_focus_in)
-        entry_buscar.bind("<FocusOut>", on_focus_out)
+        entry_buscar = tk.Entry(win, width=46, font=("Segoe UI", 10))
         entry_buscar.pack(pady=6)
-
-        # Ajustar la posición del campo de búsqueda
-        entry_buscar.pack(pady=5)
-        entry_buscar.bind("<FocusIn>", lambda e: entry_buscar.delete(0, "end") if entry_buscar.get().startswith("Ej") else None)
-        entry_buscar.bind("<FocusOut>", lambda e: entry_buscar.insert(0, "Ej: María González o 12.345.678-9") if not entry_buscar.get() else None)
-        entry_buscar.pack(pady=6)
+        self.aplicar_placeholder(entry_buscar, "Ej: Juan Pérez o 912345678")
 
         # Crear listbox para mostrar resultados de búsqueda
         listbox = tk.Listbox(win, height=10, width=70)  # 🔹 Definido correctamente
@@ -372,9 +641,9 @@ class App:
 
         def buscar(event=None):
             listbox.delete(0, tk.END)
-            texto = normalizar(entry_buscar.get().strip())
+            texto = normalizar(self.obtener_valor_entry(entry_buscar))
             resultados.clear()
-            if not texto or texto.startswith("ej:"):
+            if not texto:
                 return
             for c in self.data:
                 if texto in normalizar(c.get("nombre_completo", "")) or texto in normalizar(c.get("telefono", "")):
@@ -414,7 +683,7 @@ class App:
                 if messagebox.askyesno("Confirmar eliminación", f"¿Eliminar a {cliente.get('nombre_completo','')}? Esta acción no se puede deshacer."):
                     try:
                         self.data.remove(cliente)
-                        guardar_datos({"clientes": self.data, "precio_caja": PRECIO_CAJA, "precios_por_comuna": self.precios_por_comuna})
+                        self.guardar_estado()
                         self.ver_clientes()
                         win_op.destroy()
                         win.destroy()
@@ -466,7 +735,7 @@ class App:
             cliente["telefono"] = entries["telefono"].get().strip()
             cliente["direccion"] = direccion
             cliente["comuna"] = comuna
-            guardar_datos({"clientes": self.data, "precio_caja": PRECIO_CAJA, "precios_por_comuna": self.precios_por_comuna})
+            self.guardar_estado()
             self.ver_clientes()
             win.destroy()
             messagebox.showinfo("Éxito", "Datos del cliente actualizados.")
@@ -485,14 +754,18 @@ class App:
         def reemplazar():
             def guardar_reemplazo():
                 try:
-                    nuevo = int(entry_reemplazar.get().strip())
+                    texto_nuevo = self.obtener_valor_entry(entry_reemplazar)
+                    if not texto_nuevo:
+                        messagebox.showerror("Error", "Ingrese una cantidad válida.")
+                        return
+                    nuevo = int(texto_nuevo)
                     if nuevo < 0:
                         messagebox.showerror("Error", "La cantidad no puede ser negativa.")
                         return
                     cliente["cajas_de_huevos"] = nuevo
                     # Ajustar histórico si es menor que total actual
                     cliente["cajas_de_huevos_total"] = max(cliente.get("cajas_de_huevos_total", 0), nuevo)
-                    guardar_datos({"clientes": self.data, "precio_caja": PRECIO_CAJA, "precios_por_comuna": self.precios_por_comuna})
+                    self.guardar_estado()
                     self.ver_clientes()
                     win_replace.destroy()
                     win.destroy()
@@ -508,6 +781,7 @@ class App:
             entry_reemplazar = tk.Entry(win_replace, width=12)
             entry_reemplazar.insert(0, str(cliente.get("cajas_de_huevos",0)))
             entry_reemplazar.pack(pady=6)
+            self.aplicar_placeholder(entry_reemplazar, "Ej: 5")
             ttk.Button(win_replace, text="Guardar", command=guardar_reemplazo).pack(pady=6)
 
         btn_frame = tk.Frame(win, bg="#f7f9fb")
@@ -661,7 +935,7 @@ class App:
             for cliente in clientes_con_pedidos:
                 cliente["cajas_de_huevos"] = 0
             # Preservar los precios por comuna al guardar los datos
-            guardar_datos({"clientes": self.data, "precio_caja": PRECIO_CAJA, "precios_por_comuna": self.precios_por_comuna})
+            self.guardar_estado()
             self.ver_clientes()
 
         messagebox.showinfo("Éxito", f"Archivo '{nombre_archivo}' generado correctamente con total de {total_cajas} cajas y ganancias de ${total_ganancias:,.0f}".replace(",", "."))
@@ -709,7 +983,7 @@ class App:
                     messagebox.showerror("Error", "El precio debe ser mayor a 0.")
                     return
                 self.precios_por_comuna[comuna] = precio
-                guardar_datos({"clientes": self.data, "precio_caja": PRECIO_CAJA, "precios_por_comuna": self.precios_por_comuna})
+                self.guardar_estado()
                 tree.insert("", "end", values=(comuna, f"${precio}"))
                 messagebox.showinfo("Éxito", f"Precio para {comuna} agregado correctamente.")
             except ValueError:
@@ -723,7 +997,7 @@ class App:
             comuna = tree.item(sel[0], "values")[0]
             if messagebox.askyesno("Confirmar", f"¿Eliminar el precio para {comuna}?"):
                 del self.precios_por_comuna[comuna]
-                guardar_datos({"clientes": self.data, "precio_caja": PRECIO_CAJA, "precios_por_comuna": self.precios_por_comuna})
+                self.guardar_estado()
                 tree.delete(sel[0])
                 messagebox.showinfo("Éxito", f"Precio para {comuna} eliminado correctamente.")
 
@@ -737,10 +1011,10 @@ class App:
 
     def agregar_dia_reparto(self):
         def guardar_dia():
-            dia = entry_dia.get().strip()
+            dia = self.obtener_valor_entry(entry_dia)
             if dia:
                 cliente["dia_reparto"] = dia
-                guardar_datos({"clientes": self.data, "precio_caja": PRECIO_CAJA, "precios_por_comuna": self.precios_por_comuna})
+                self.guardar_estado()
                 self.ver_clientes()
                 win.destroy()
                 messagebox.showinfo("Éxito", f"Día de reparto para {cliente['nombre_completo']} actualizado a '{dia}'.")
@@ -764,8 +1038,11 @@ class App:
         tk.Label(win, text="Día de reparto:", bg="#f7f9fb", font=("Segoe UI", 10)).pack(pady=(4, 0))
 
         entry_dia = tk.Entry(win, width=20, font=("Segoe UI", 10))
+        valor_actual = cliente.get("dia_reparto", "")
+        if valor_actual:
+            entry_dia.insert(0, valor_actual)
         entry_dia.pack(pady=6)
-        entry_dia.insert(0, cliente.get("dia_reparto", ""))
+        self.aplicar_placeholder(entry_dia, "Ej: Lunes")
 
         ttk.Button(win, text="Guardar", command=guardar_dia).pack(pady=10)
 
