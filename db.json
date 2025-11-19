@@ -32,7 +32,7 @@
             "telefono": "945612378",
             "direccion": "Av. El Bosque 1201",
             "comuna": "Providencia",
-            "cajas_de_huevos_total": 8,
+            "cajas_de_huevos_total": 10,
             "cajas_de_huevos": 0,
             "dia_reparto": null
         },
@@ -113,7 +113,7 @@
             "telefono": "933214567",
             "direccion": "Av. Matta 453",
             "comuna": "Santiago Centro",
-            "cajas_de_huevos_total": 4,
+            "cajas_de_huevos_total": 6,
             "cajas_de_huevos": 0,
             "dia_reparto": null
         },
@@ -194,11 +194,41 @@
             "telefono": "23234234",
             "direccion": "lo liros 32",
             "comuna": "melipilla",
-            "cajas_de_huevos_total": 3,
+            "cajas_de_huevos_total": 6,
             "cajas_de_huevos": 0,
             "dia_reparto": "Martes"
+        },
+        {
+            "nombre_completo": "loreto",
+            "telefono": "324234",
+            "direccion": "liraaa",
+            "comuna": "santiago",
+            "cajas_de_huevos_total": 0,
+            "cajas_de_huevos": 0,
+            "dia_reparto": "martes"
         }
     ],
     "precio_caja": 7000,
-    "precios_por_comuna": {}
+    "precios_por_comuna": {},
+    "movimientos": [
+        {
+            "id": "20251118214005440870",
+            "fecha": "18-11-2025 21:39",
+            "fecha_iso": "2025-11-18T21:39:00",
+            "tipo": "Ingreso",
+            "monto": 20000.0,
+            "descripcion": "Huevos",
+            "referencia": "Efectivo"
+        },
+        {
+            "id": "20251118214037356766",
+            "fecha": "18-11-2025 21:40",
+            "fecha_iso": "2025-11-18T21:40:00",
+            "tipo": "Egreso",
+            "monto": 5000.0,
+            "descripcion": "Bencina",
+            "referencia": "Efectivo"
+        }
+    ],
+    "caja_manual": {}
 }
