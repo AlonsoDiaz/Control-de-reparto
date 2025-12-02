@@ -5,7 +5,7 @@
             "telefono": "912345678",
             "direccion": "Av. Los Alerces 123",
             "comuna": "Maipú",
-            "cajas_de_huevos_total": 6,
+            "cajas_de_huevos_total": 8,
             "cajas_de_huevos": 0,
             "dia_reparto": null
         },
@@ -193,7 +193,7 @@
             "nombre_completo": "Mikel",
             "telefono": "23234234",
             "direccion": "lo liros 32",
-            "comuna": "melipilla",
+            "comuna": "Melipilla",
             "cajas_de_huevos_total": 6,
             "cajas_de_huevos": 0,
             "dia_reparto": "Martes"
@@ -202,14 +202,25 @@
             "nombre_completo": "loreto",
             "telefono": "324234",
             "direccion": "liraaa",
-            "comuna": "santiago",
+            "comuna": "Santiago",
             "cajas_de_huevos_total": 0,
             "cajas_de_huevos": 0,
             "dia_reparto": "martes"
+        },
+        {
+            "nombre_completo": "fff",
+            "telefono": "32",
+            "direccion": "fff",
+            "comuna": "Melipilla",
+            "cajas_de_huevos_total": 2,
+            "cajas_de_huevos": 0,
+            "dia_reparto": "ff"
         }
     ],
     "precio_caja": 7000,
-    "precios_por_comuna": {},
+    "precios_por_comuna": {
+        "Melipilla": 8000
+    },
     "movimientos": [
         {
             "id": "20251118214005440870",
@@ -228,7 +239,40 @@
             "monto": 5000.0,
             "descripcion": "Bencina",
             "referencia": "Efectivo"
+        },
+        {
+            "id": "20251202143008135555",
+            "fecha": "02-12-2025 14:29",
+            "fecha_iso": "2025-12-02T14:29:00",
+            "tipo": "Ingreso",
+            "monto": 8000.0,
+            "descripcion": "Venta rapida",
+            "referencia": "efectivo"
         }
     ],
-    "caja_manual": {}
+    "caja_manual": {},
+    "comunas": [
+        "Cerrillos",
+        "Estación Central",
+        "Huechuraba",
+        "Independencia",
+        "La Florida",
+        "La Reina",
+        "Las Condes",
+        "Lo Prado",
+        "Macul",
+        "Maipú",
+        "Melipilla",
+        "Peñalolén",
+        "Providencia",
+        "Puente Alto",
+        "Quilicura",
+        "Recoleta",
+        "Renca",
+        "San Joaquín",
+        "San Miguel",
+        "Santiago",
+        "Santiago Centro",
+        "Ñuñoa"
+    ]
 }
