@@ -27,7 +27,8 @@ def cargar_datos():
             "precio_caja": PRECIO_CAJA,
             "precios_por_comuna": {},
             "movimientos": [],
-            "caja_manual": DEFAULT_CAJA_MANUAL.copy()
+            "caja_manual": DEFAULT_CAJA_MANUAL.copy(),
+            "comunas": []
         }
     try:
         with open(ARCHIVO, "r", encoding="utf-8") as f:
@@ -39,6 +40,7 @@ def cargar_datos():
             data.setdefault("precio_caja", PRECIO_CAJA)
             data.setdefault("precios_por_comuna", {})
             data.setdefault("movimientos", [])
+            data.setdefault("comunas", [])
             data["caja_manual"] = {}
             return data
     except (json.JSONDecodeError, ValueError, IOError):
@@ -48,7 +50,8 @@ def cargar_datos():
             "precio_caja": PRECIO_CAJA,
             "precios_por_comuna": {},
             "movimientos": [],
-            "caja_manual": DEFAULT_CAJA_MANUAL.copy()
+            "caja_manual": DEFAULT_CAJA_MANUAL.copy(),
+            "comunas": []
         }
 
 def guardar_datos(data):
@@ -63,46 +66,164 @@ def guardar_datos(data):
 class App:
     def __init__(self, root):
         self.root = root
+        self.style = ttk.Style()
+        self.style.theme_use("clam")
+
+        self.temas = {
+            "claro": {
+                "bg": "#f0f4f8",
+                "panel": "#f7f9fb",
+                "texto": "#003366",
+                "texto_secundario": "#4b5d6b",
+                "tree_bg": "#ffffff",
+                "tree_fg": "#111827",
+                "tree_sel": "#cce5ff",
+                "tree_header_bg": "#d1e7ff",
+                "tree_header_fg": "#003366",
+                "entry_bg": "#ffffff",
+                "entry_fg": "#111827",
+                "placeholder": "#777777",
+                "boton_bg": "#e2ecff",
+                "boton_fg": "#003366",
+                "boton_hover": "#d0dcf5"
+            },
+            "oscuro": {
+                "bg": "#1f2430",
+                "panel": "#2a2f3d",
+                "texto": "#e6edf7",
+                "texto_secundario": "#9da7c5",
+                "tree_bg": "#272c38",
+                "tree_fg": "#f7f9fe",
+                "tree_sel": "#3d4558",
+                "tree_header_bg": "#303644",
+                "tree_header_fg": "#e6edf7",
+                "entry_bg": "#32394a",
+                "entry_fg": "#f7f9fe",
+                "placeholder": "#8c94ab",
+                "boton_bg": "#3a4255",
+                "boton_fg": "#f0f4ff",
+                "boton_hover": "#4a546b"
+            }
+        }
+        self.tema_actual = "claro"
+        self.colores = self.temas[self.tema_actual]
+        self.widgets_tema = []
+        self.root.configure(bg=self.colores["bg"])
+        self.registrar_widget_tema(self.root, fondo="bg")
+        self.configurar_estilos_ttk()
+
         self.root.title("📦 Control de Reparto de Huevos")
         self.root.geometry("1024x720")
-        self.root.configure(bg="#f0f4f8")
-
-        style = ttk.Style()
-        style.theme_use("clam")
-        style.configure("Treeview.Heading", font=("Segoe UI", 11, "bold"), background="#d1e7ff", foreground="#003366")
-        style.configure("Treeview", font=("Segoe UI", 10), rowheight=28, background="#ffffff", fieldbackground="#ffffff")
-        style.map("Treeview", background=[("selected", "#cce5ff")])
+        self.root.configure(bg=self.colores["bg"])
 
         datos_cargados = cargar_datos()
         self.data = datos_cargados.get("clientes", [])
-        self.precios_por_comuna = datos_cargados.get("precios_por_comuna", {})
+        self.precios_por_comuna = {
+            self.estandarizar_comuna(comuna): precio
+            for comuna, precio in datos_cargados.get("precios_por_comuna", {}).items()
+            if self.estandarizar_comuna(comuna)
+        }
         self.movimientos = datos_cargados.get("movimientos", [])
         self.caja_manual = dict(datos_cargados.get("caja_manual", {}))
+        self._combobox_comunas = []
+        self._comunas_map = {}
+        self.comunas = []
+        self.filtro_comuna_actual = None
+        self.filtro_dia_actual = None
+        self.actualizar_comunas_existentes(datos_cargados.get("comunas", []))
         global PRECIO_CAJA
         PRECIO_CAJA = datos_cargados.get("precio_caja", PRECIO_CAJA)
 
-        frame = tk.Frame(root, padx=16, pady=16, bg="#f0f4f8")
+        frame = self.crear_frame_tema(root, fondo="bg", padx=16, pady=16)
         frame.pack(fill="both", expand=True)
 
-        tk.Label(frame, text="📋 Control de Reparto", font=("Segoe UI", 18, "bold"), bg="#f0f4f8", fg="#003366").pack(pady=(0, 12))
+        top_bar = self.crear_frame_tema(frame, fondo="bg")
+        top_bar.pack(fill="x")
 
-        botones_frame = tk.Frame(frame, bg="#f0f4f8")
+        self.tema_var = tk.BooleanVar(value=self.tema_actual == "oscuro")
+        self.boton_tema = ttk.Checkbutton(
+            top_bar,
+            text="☀️",
+            style="Switch.TCheckbutton",
+            width=4,
+            variable=self.tema_var,
+            command=self.alternar_tema
+        )
+        self.boton_tema.pack(side="right", padx=(0, 4))
+        self.boton_tema.config(compound="center")
+        self.actualizar_texto_boton_tema()
+
+        titulo = self.crear_label_tema(frame, "📋 Control de Reparto", font=("Segoe UI", 18, "bold"))
+        titulo.pack(pady=(4, 12))
+
+        botones_frame = self.crear_frame_tema(frame, fondo="bg")
         botones_frame.pack(pady=12)
 
         botones = [
-            ("➕ Agregar cliente", self.ventana_agregar_cliente),
-            ("🥚 Nuevo pedido", self.ventana_nuevo_pedido),
-            ("✏️ Editar", self.ventana_editar),
-            ("📦 Generar reparto", self.generar_reparto),
-            ("📊 Ver resumen", self.ventana_resumen),
-            ("🏘️ Gestionar Precios", self.gestionar_precios_por_comuna),
-            ("💲 Cambiar precio", self.cambiar_precio_caja),
-            ("💰 Gestión de Caja", self.ventana_caja),
-            ("🚪 Salir", root.quit)
+            ("Agregar cliente", self.ventana_agregar_cliente),
+            ("Nuevo pedido", self.ventana_nuevo_pedido),
+            ("Editar", self.ventana_editar),
+            ("Generar reparto", self.generar_reparto),
+            ("Ver resumen", self.ventana_resumen),
+            ("Gestionar Precios", self.gestionar_precios_por_comuna),
+            ("Cambiar precio", self.cambiar_precio_caja),
+            ("Gestión de Caja", self.ventana_caja),
+            ("Salir", root.quit)
         ]
 
         for text, cmd in botones:
             ttk.Button(botones_frame, text=text, command=cmd, width=20).pack(side="left", padx=6)
+
+        filtros_frame = self.crear_frame_tema(frame, fondo="bg")
+        filtros_frame.pack(fill="x", pady=(4, 10))
+
+        comuna_container = self.crear_frame_tema(filtros_frame, fondo="bg")
+        comuna_container.pack(side="left")
+        self.crear_label_tema(comuna_container, "Comuna", font=("Segoe UI", 9)).pack(side="left", padx=(0, 6))
+        self.combo_filtro_comuna = self.crear_combobox_comunas(
+            comuna_container,
+            permitir_agregar=False,
+            incluir_todas=True,
+            width=22
+        )
+        self.combo_filtro_comuna.pack(side="left")
+
+        dia_container = self.crear_frame_tema(filtros_frame, fondo="bg")
+        dia_container.pack(side="left", padx=(18, 0))
+        self.crear_label_tema(dia_container, "Día", font=("Segoe UI", 9)).pack(side="left", padx=(0, 6))
+        self.combo_filtro_dia = ttk.Combobox(dia_container, state="readonly", width=18)
+        self.combo_filtro_dia.pack(side="left")
+
+        limpiar_container = self.crear_frame_tema(filtros_frame, fondo="bg")
+        limpiar_container.pack(side="left", padx=(18, 0))
+        ttk.Button(
+            limpiar_container,
+            text="↺ Limpiar",
+            command=self.restablecer_filtros,
+            width=10
+        ).pack(side="left")
+
+        def on_cambio_comuna(_):
+            seleccion = self.combo_filtro_comuna.get()
+            if seleccion == "Todas" or not seleccion:
+                self.filtro_comuna_actual = None
+            else:
+                self.filtro_comuna_actual = self.registrar_comuna(seleccion, actualizar_opciones=False)
+            self.ver_clientes()
+
+        def on_cambio_dia(_):
+            seleccion = self.combo_filtro_dia.get()
+            if seleccion == "Todos" or not seleccion:
+                self.filtro_dia_actual = None
+            else:
+                self.filtro_dia_actual = seleccion
+            self.ver_clientes()
+
+        self.combo_filtro_comuna.bind("<<ComboboxSelected>>", on_cambio_comuna, add="+")
+        self.combo_filtro_dia.bind("<<ComboboxSelected>>", on_cambio_dia, add="+")
+
+        self.actualizar_opciones_dias()
+        self.restablecer_filtros(actualizar_tabla=False)
 
         self.tree = ttk.Treeview(
             frame,
@@ -117,12 +238,164 @@ class App:
 
         self.tree.pack(fill="both", expand=True, pady=16)
 
-        self.label_total = tk.Label(frame, text="", bg="#f0f4f8", fg="#003366", font=("Segoe UI", 12, "bold"))
+        self.label_total = self.crear_label_tema(frame, "", font=("Segoe UI", 12, "bold"))
         self.label_total.pack(pady=(8, 0))
 
-        tk.Label(frame, text="Versión 1.3.0", fg="#888", font=("Segoe UI", 10, "italic"), bg="#f0f4f8").pack(pady=(8, 0))
+        self.label_version = self.crear_label_tema(frame, "Versión 1.4.0", font=("Segoe UI", 10, "italic"), texto_color="secundario")
+        self.label_version.pack(pady=(8, 0))
 
         self.ver_clientes()
+
+    def registrar_widget_tema(self, widget, fondo="bg", texto="primario"):
+        if not widget:
+            return
+        for idx, (w, _, _) in enumerate(self.widgets_tema):
+            if w is widget:
+                self.widgets_tema[idx] = (widget, fondo, texto)
+                break
+        else:
+            self.widgets_tema.append((widget, fondo, texto))
+        self._aplicar_colores_widget(widget, fondo, texto)
+
+    def _aplicar_colores_widget(self, widget, fondo, texto):
+        if not widget or not widget.winfo_exists():
+            return
+        colores = self.colores
+        color_bg = None
+        if fondo == "bg":
+            color_bg = colores["bg"]
+        elif fondo == "panel":
+            color_bg = colores["panel"]
+        elif fondo == "entry":
+            color_bg = colores["entry_bg"]
+        if color_bg is not None:
+            try:
+                widget.configure(bg=color_bg)
+            except tk.TclError:
+                pass
+        if isinstance(widget, tk.Entry):
+            widget.configure(bg=colores["entry_bg"], insertbackground=colores["texto"])
+            if hasattr(widget, "_placeholder_text"):
+                widget._placeholder_color = colores["placeholder"]
+                widget._text_color = colores["entry_fg"]
+                if widget.get() == widget._placeholder_text:
+                    widget.configure(fg=widget._placeholder_color)
+                else:
+                    widget.configure(fg=widget._text_color)
+            else:
+                widget.configure(fg=colores["entry_fg"])
+        if isinstance(widget, tk.Listbox):
+            widget.configure(bg=colores["panel"], fg=colores["texto"], selectbackground=colores["tree_sel"], selectforeground=colores["tree_fg"])
+        if isinstance(widget, tk.LabelFrame):
+            widget.configure(bg=colores["panel"], fg=colores["texto"])
+        if isinstance(widget, tk.Label):
+            if texto == "primario":
+                widget.configure(fg=colores["texto"])
+            elif texto == "secundario":
+                widget.configure(fg=colores["texto_secundario"])
+        if isinstance(widget, tk.Toplevel):
+            widget.configure(bg=colores["panel"])
+
+    def actualizar_tema_widgets(self):
+        for widget, fondo, texto in list(self.widgets_tema):
+            if widget and widget.winfo_exists():
+                self._aplicar_colores_widget(widget, fondo, texto)
+
+    def configurar_estilos_ttk(self):
+        colores = self.colores
+        self.style.configure(
+            "Treeview",
+            background=colores["tree_bg"],
+            fieldbackground=colores["tree_bg"],
+            foreground=colores["tree_fg"],
+            rowheight=28,
+            bordercolor=colores["panel"],
+            relief="flat"
+        )
+        self.style.map("Treeview", background=[("selected", colores["tree_sel"])], foreground=[("selected", colores["tree_fg"])])
+        self.style.configure("Treeview.Heading", font=("Segoe UI", 11, "bold"), background=colores["tree_header_bg"], foreground=colores["tree_header_fg"])
+        self.style.configure("TCombobox", fieldbackground=colores["entry_bg"], foreground=colores["entry_fg"], background=colores["entry_bg"])
+        self.style.map("TCombobox", fieldbackground=[("readonly", colores["entry_bg"])], foreground=[("readonly", colores["entry_fg"])])
+        self.style.configure("TButton", background=colores["boton_bg"], foreground=colores["boton_fg"], padding=5)
+        self.style.map("TButton", background=[("active", colores["boton_hover"]), ("pressed", colores["boton_hover"])])
+        self.style.configure("TLabel", background=colores["bg"], foreground=colores["texto"])
+        self.style.configure(
+            "Switch.TCheckbutton",
+            background=colores["bg"],
+            foreground=colores["texto"],
+            padding=(4, 2),
+            indicatoron=False
+        )
+        self.style.map(
+            "Switch.TCheckbutton",
+            background=[("selected", colores["boton_bg"]), ("active", colores["boton_hover"])],
+            foreground=[("selected", colores["boton_fg"]), ("active", colores["boton_fg"])],
+            relief=[("pressed", "sunken"), ("!pressed", "flat")]
+        )
+
+    def aplicar_tema_actual(self):
+        self.colores = self.temas[self.tema_actual]
+        self.configurar_estilos_ttk()
+        self.root.configure(bg=self.colores["bg"])
+        self.actualizar_tema_widgets()
+        self.actualizar_texto_boton_tema()
+        self.ver_clientes()
+
+    def alternar_tema(self):
+        seleccionado = False
+        if hasattr(self, "tema_var"):
+            seleccionado = bool(self.tema_var.get())
+        nuevo_tema = "oscuro" if seleccionado else "claro"
+        if nuevo_tema != self.tema_actual:
+            self.tema_actual = nuevo_tema
+            self.aplicar_tema_actual()
+        else:
+            if hasattr(self, "tema_var"):
+                self.tema_var.set(self.tema_actual == "oscuro")
+
+    def actualizar_texto_boton_tema(self):
+        if hasattr(self, "boton_tema") and self.boton_tema:
+            if hasattr(self, "tema_var"):
+                self.tema_var.set(self.tema_actual == "oscuro")
+            icono = "🌙" if self.tema_actual == "oscuro" else "☀️"
+            self.boton_tema.config(text=icono)
+
+    def crear_frame_tema(self, parent, fondo="bg", **kwargs):
+        frame = tk.Frame(parent, **kwargs)
+        self.registrar_widget_tema(frame, fondo=fondo, texto=None)
+        return frame
+
+    def crear_label_tema(self, parent, texto, font=None, fondo="bg", texto_color="primario", **kwargs):
+        label = tk.Label(parent, text=texto, font=font, **kwargs)
+        self.registrar_widget_tema(label, fondo=fondo, texto=texto_color)
+        return label
+
+    def crear_toplevel_tema(self, titulo, geometry=None, resizable=True):
+        win = tk.Toplevel(self.root)
+        win.title(titulo)
+        if geometry:
+            win.geometry(geometry)
+        if not resizable:
+            win.resizable(False, False)
+        self.registrar_widget_tema(win, fondo="panel", texto=None)
+        self.centrar_ventana(win)
+        return win
+
+    def registrar_descendencia_tema(self, widget):
+        if not widget or not widget.winfo_exists():
+            return
+        for child in widget.winfo_children():
+            if isinstance(child, tk.Entry):
+                self.registrar_widget_tema(child, fondo="entry")
+            elif isinstance(child, (tk.Frame, tk.LabelFrame)):
+                self.registrar_widget_tema(child, fondo="panel", texto=None)
+            elif isinstance(child, tk.Label):
+                self.registrar_widget_tema(child, fondo="panel")
+            elif isinstance(child, tk.Listbox):
+                self.registrar_widget_tema(child, fondo="panel")
+            elif isinstance(child, tk.Toplevel):
+                self.registrar_widget_tema(child, fondo="panel", texto=None)
+            self.registrar_descendencia_tema(child)
 
     # ------------------ Mostrar clientes ------------------
 
@@ -130,24 +403,33 @@ class App:
         for item in self.tree.get_children():
             self.tree.delete(item)
 
-        clientes_ordenados = sorted(self.data, key=lambda c: c.get("cajas_de_huevos", 0), reverse=True)
+        self.actualizar_opciones_dias(self.filtro_dia_actual or "Todos")
+
+        filtro_comuna = self.filtro_comuna_actual
+        filtro_dia_norm = normalizar(self.filtro_dia_actual) if self.filtro_dia_actual else ""
+
+        clientes_filtrados = []
+        for cliente in self.data:
+            if filtro_comuna and self.estandarizar_comuna(cliente.get("comuna")) != filtro_comuna:
+                continue
+            if filtro_dia_norm and normalizar(cliente.get("dia_reparto", "")) != filtro_dia_norm:
+                continue
+            clientes_filtrados.append(cliente)
+
+        clientes_ordenados = sorted(clientes_filtrados, key=lambda c: c.get("cajas_de_huevos", 0), reverse=True)
         total_pendiente = 0
 
         for c in clientes_ordenados:
             pendiente = c.get("cajas_de_huevos", 0)
             total_pendiente += pendiente
 
-            comuna_valor = (c.get("comuna", "") or "").strip()
-            comuna_mostrar = comuna_valor.capitalize() if comuna_valor else ""
+            comuna_valor = self.estandarizar_comuna(c.get("comuna"))
+            comuna_mostrar = comuna_valor or ""
 
             dia_valor = (c.get("dia_reparto", "") or "").strip()
             dia_mostrar = dia_valor.capitalize() if dia_valor else "-"
 
-            precio = PRECIO_CAJA
-            for comuna_guardada, valor in self.precios_por_comuna.items():
-                if normalizar(comuna_guardada) == normalizar(comuna_valor):
-                    precio = valor
-                    break
+            precio = self.obtener_precio_por_comuna(comuna_valor)
 
             total_adeudado = pendiente * precio
 
@@ -163,32 +445,41 @@ class App:
             ))
 
         # Actualizar la etiqueta con el total de cajas pendientes
-        self.label_total.config(text=f"🥚 Total de cajas pendientes a entrega: {total_pendiente}")
+        filtros_activos = []
+        if self.filtro_comuna_actual:
+            filtros_activos.append(f"comuna {self.filtro_comuna_actual}")
+        if self.filtro_dia_actual:
+            filtros_activos.append(f"día {self.filtro_dia_actual}")
+        resumen_filtros = f" • Filtros: {', '.join(filtros_activos)}" if filtros_activos else ""
+        self.label_total.config(text=f"🥚 Total de cajas pendientes a entrega: {total_pendiente}{resumen_filtros}")
         self.label_total.pack(pady=(8, 0))
 
-    def aplicar_placeholder(self, entry, placeholder_text, color_placeholder="#777", color_text="#000"):
+    def aplicar_placeholder(self, entry, placeholder_text):
+        self.registrar_widget_tema(entry, fondo="entry")
         entry._placeholder_text = placeholder_text
-        entry._placeholder_color = color_placeholder
-        entry._text_color = color_text
+        entry._placeholder_color = self.colores["placeholder"]
+        entry._text_color = self.colores["entry_fg"]
 
         def on_focus_in(_):
-            if entry.get() == placeholder_text and entry.cget("fg") == color_placeholder:
+            if entry.get() == entry._placeholder_text and entry.cget("fg") == entry._placeholder_color:
                 entry.delete(0, tk.END)
-                entry.config(fg=color_text)
+                entry.config(fg=entry._text_color)
 
         def on_focus_out(_):
             if not entry.get():
-                entry.insert(0, placeholder_text)
-                entry.config(fg=color_placeholder)
+                entry.insert(0, entry._placeholder_text)
+                entry.config(fg=entry._placeholder_color)
 
         entry.bind("<FocusIn>", on_focus_in, add="+")
         entry.bind("<FocusOut>", on_focus_out, add="+")
 
         if not entry.get():
-            entry.insert(0, placeholder_text)
-            entry.config(fg=color_placeholder)
+            entry.insert(0, entry._placeholder_text)
+            entry.config(fg=entry._placeholder_color)
+        elif entry.get() == entry._placeholder_text:
+            entry.config(fg=entry._placeholder_color)
         else:
-            entry.config(fg=color_text)
+            entry.config(fg=entry._text_color)
 
     def obtener_valor_entry(self, entry):
         placeholder_text = getattr(entry, "_placeholder_text", None)
@@ -198,21 +489,204 @@ class App:
             return ""
         return valor
 
+    def estandarizar_comuna(self, comuna):
+        base = (comuna or "").strip()
+        if not base:
+            return ""
+        candidato = base.title()
+        clave = normalizar(candidato)
+        existente = getattr(self, "_comunas_map", {}).get(clave)
+        return existente or candidato
+
+    def registrar_comuna(self, comuna, actualizar_opciones=True):
+        nombre = self.estandarizar_comuna(comuna)
+        if not nombre:
+            return ""
+        clave = normalizar(nombre)
+        if clave not in self._comunas_map:
+            self._comunas_map[clave] = nombre
+            self.comunas = sorted(self._comunas_map.values())
+            if actualizar_opciones:
+                self.actualizar_opciones_comunas()
+        return self._comunas_map[clave]
+
+    def obtener_precio_por_comuna(self, comuna):
+        clave = normalizar(self.estandarizar_comuna(comuna))
+        if not clave:
+            return PRECIO_CAJA
+        for comuna_guardada, precio in self.precios_por_comuna.items():
+            if normalizar(comuna_guardada) == clave:
+                return precio
+        return PRECIO_CAJA
+
+    def actualizar_comunas_existentes(self, comunas_guardadas=None):
+        self._comunas_map = {}
+
+        if comunas_guardadas:
+            for comuna in comunas_guardadas:
+                self.registrar_comuna(comuna, actualizar_opciones=False)
+
+        precios_ajustados = {}
+        for comuna, precio in list(self.precios_por_comuna.items()):
+            comuna_canonica = self.registrar_comuna(comuna, actualizar_opciones=False)
+            if comuna_canonica:
+                precios_ajustados[comuna_canonica] = precio
+        self.precios_por_comuna = precios_ajustados
+
+        for cliente in self.data:
+            comuna_canonica = self.registrar_comuna(cliente.get("comuna"), actualizar_opciones=False)
+            cliente["comuna"] = comuna_canonica
+
+        self.comunas = sorted(self._comunas_map.values())
+        self.actualizar_opciones_comunas()
+        self.actualizar_opciones_dias()
+
+    def actualizar_opciones_comunas(self, seleccion_preferida=None):
+        opciones_base = list(self.comunas)
+        combos_activos = []
+        for combo in getattr(self, "_combobox_comunas", []):
+            if not combo.winfo_exists():
+                continue
+            combos_activos.append(combo)
+            opciones = list(opciones_base)
+            if getattr(combo, "incluir_todas", False):
+                opciones = ["Todas"] + opciones
+            if getattr(combo, "permitir_agregar_comuna", True):
+                opciones = opciones + ["Agregar comuna..."]
+            combo["values"] = opciones
+
+            valor_actual = combo.get()
+            if valor_actual not in opciones:
+                if getattr(combo, "incluir_todas", False) and "Todas" in opciones:
+                    combo.set("Todas")
+                elif opciones:
+                    combo.set(opciones[0])
+
+            if seleccion_preferida and seleccion_preferida in opciones and valor_actual == "Agregar comuna...":
+                combo.set(seleccion_preferida)
+
+        self._combobox_comunas = combos_activos
+
+    def actualizar_opciones_dias(self, seleccion_preferida=None):
+        if not hasattr(self, "combo_filtro_dia") or not self.combo_filtro_dia.winfo_exists():
+            return
+        dias_disponibles = sorted({
+            (c.get("dia_reparto") or "").strip().title()
+            for c in self.data
+            if (c.get("dia_reparto") or "").strip()
+        })
+        opciones = ["Todos"] + dias_disponibles if dias_disponibles else ["Todos"]
+        valor_prev = self.combo_filtro_dia.get()
+        preferencia = seleccion_preferida or (valor_prev if valor_prev in opciones else None)
+        self.combo_filtro_dia["values"] = opciones
+        if preferencia and preferencia in opciones:
+            self.combo_filtro_dia.set(preferencia)
+            self.filtro_dia_actual = None if preferencia == "Todos" else preferencia
+        else:
+            self.combo_filtro_dia.set("Todos")
+            self.filtro_dia_actual = None
+
+    def restablecer_filtros(self, actualizar_tabla=True):
+        self.filtro_comuna_actual = None
+        self.filtro_dia_actual = None
+        if hasattr(self, "combo_filtro_comuna") and self.combo_filtro_comuna.winfo_exists():
+            if "Todas" in self.combo_filtro_comuna["values"]:
+                self.combo_filtro_comuna.set("Todas")
+        self.actualizar_opciones_dias("Todos")
+        if actualizar_tabla:
+            self.ver_clientes()
+
+    def crear_combobox_comunas(self, parent, valor_inicial=None, permitir_agregar=True, incluir_todas=False, width=24):
+        combo = ttk.Combobox(parent, state="readonly", width=width)
+        combo.permitir_agregar_comuna = permitir_agregar
+        combo.incluir_todas = incluir_todas
+        self._combobox_comunas.append(combo)
+        self.actualizar_opciones_comunas()
+
+        if incluir_todas and "Todas" in combo["values"]:
+            combo.set("Todas")
+
+        if valor_inicial:
+            valor_est = self.estandarizar_comuna(valor_inicial)
+            if incluir_todas and valor_inicial == "Todas" and "Todas" in combo["values"]:
+                combo.set("Todas")
+            elif valor_est and valor_est in self.comunas:
+                combo.set(valor_est)
+
+        if permitir_agregar:
+            def on_select(_):
+                if combo.get() == "Agregar comuna...":
+                    nueva = simpledialog.askstring("Nueva comuna", "Ingresa el nombre de la comuna:")
+                    if not nueva:
+                        self.actualizar_opciones_comunas()
+                        return
+                    nueva_est = self.estandarizar_comuna(nueva)
+                    if not nueva_est:
+                        messagebox.showerror("Error", "El nombre de la comuna no es válido.")
+                        self.actualizar_opciones_comunas()
+                        return
+                    comuna_registrada = self.registrar_comuna(nueva_est)
+                    combo.set(comuna_registrada)
+                    self.actualizar_opciones_comunas(comuna_registrada)
+                    self.guardar_estado()
+
+            combo.bind("<<ComboboxSelected>>", on_select, add="+")
+
+        return combo
+
+    def obtener_comuna_combo(self, combo):
+        valor = (combo.get() or "").strip()
+        if not valor or valor == "Agregar comuna..." or valor == "Todas":
+            return ""
+        return self.registrar_comuna(valor, actualizar_opciones=False)
+
+    def dialogo_seleccion_comuna(self, titulo, mensaje, incluir_todas=False):
+        dialogo = self.crear_toplevel_tema(titulo, resizable=False)
+        dialogo.grab_set()
+
+        self.crear_label_tema(dialogo, mensaje, font=("Segoe UI", 11), fondo="panel").pack(padx=18, pady=(14, 8))
+        combo = self.crear_combobox_comunas(dialogo, incluir_todas=incluir_todas, width=28)
+        combo.pack(padx=18, pady=(0, 12))
+
+        resultado = {"comuna": None}
+
+        def aceptar():
+            seleccion = combo.get()
+            if not seleccion or seleccion == "Agregar comuna...":
+                messagebox.showwarning("Selecciona una comuna", "Debes elegir una comuna válida.")
+                return
+            if incluir_todas and seleccion == "Todas":
+                resultado["comuna"] = None
+            else:
+                resultado["comuna"] = self.registrar_comuna(seleccion, actualizar_opciones=False)
+            dialogo.destroy()
+
+        def cancelar():
+            resultado["comuna"] = None
+            dialogo.destroy()
+
+        botones = self.crear_frame_tema(dialogo, fondo="panel")
+        botones.pack(pady=(0, 12))
+        ttk.Button(botones, text="Aceptar", command=aceptar).grid(row=0, column=0, padx=6)
+        ttk.Button(botones, text="Cancelar", command=cancelar).grid(row=0, column=1, padx=6)
+
+        self.registrar_descendencia_tema(dialogo)
+
+        dialogo.wait_window()
+        return resultado["comuna"]
+
     def guardar_estado(self):
         guardar_datos({
             "clientes": self.data,
             "precio_caja": PRECIO_CAJA,
             "precios_por_comuna": self.precios_por_comuna,
             "movimientos": self.movimientos,
-            "caja_manual": self.caja_manual
+            "caja_manual": self.caja_manual,
+            "comunas": self.comunas
         })
 
     def ventana_caja(self):
-        win = tk.Toplevel(self.root)
-        win.title("Gestión de Caja")
-        win.geometry("600x600")
-        win.configure(bg="#f7f9fb")
-        self.centrar_ventana(win)
+        win = self.crear_toplevel_tema("Gestión de Caja", geometry="600x600")
 
         tk.Label(win, text="💰 Gestión de caja", bg="#f7f9fb", font=("Segoe UI", 14, "bold")).pack(pady=(10, 8))
 
@@ -351,14 +825,12 @@ class App:
         ttk.Button(registros_btn_frame, text="Eliminar seleccionado", command=eliminar_registro).grid(row=0, column=1, padx=6)
         ttk.Button(registros_btn_frame, text="Cerrar", command=win.destroy).grid(row=0, column=2, padx=6)
 
+        self.registrar_descendencia_tema(win)
+
         refrescar_registros()
 
     def abrir_formulario_registro(self, callback_refresco):
-        win = tk.Toplevel(self.root)
-        win.title("Nuevo registro de caja")
-        win.geometry("360x360")
-        win.configure(bg="#f7f9fb")
-        self.centrar_ventana(win)
+        win = self.crear_toplevel_tema("Nuevo registro de caja", geometry="360x360")
 
         tk.Label(win, text="Registrar movimiento manual", bg="#f7f9fb", font=("Segoe UI", 13, "bold")).pack(pady=(10, 10))
 
@@ -436,6 +908,9 @@ class App:
         ttk.Button(botones, text="Guardar", command=guardar_registro).grid(row=0, column=0, padx=6)
         ttk.Button(botones, text="Cancelar", command=win.destroy).grid(row=0, column=1, padx=6)
 
+        self.registrar_descendencia_tema(win)
+
+        win.grab_set()
     # ------------------ Cambiar precio de la caja ------------------
 
     def cambiar_precio_caja(self):
@@ -459,11 +934,7 @@ class App:
             except ValueError:
                 messagebox.showerror("Error", "Ingrese un número válido.")
 
-        win = tk.Toplevel(self.root)
-        win.title("Cambiar Precio de la Bandeja")
-        win.geometry("300x150")
-        win.configure(bg="#f7f9fb")
-        self.centrar_ventana(win)
+        win = self.crear_toplevel_tema("Cambiar Precio de la Bandeja", geometry="300x150")
 
         tk.Label(win, text="Precio actual: $" + str(PRECIO_CAJA), bg="#f7f9fb", font=("Segoe UI", 11)).pack(pady=(10, 4))
         tk.Label(win, text="Nuevo precio:", bg="#f7f9fb", font=("Segoe UI", 10)).pack(pady=(4, 0))
@@ -474,6 +945,8 @@ class App:
 
         ttk.Button(win, text="Guardar", command=guardar_precio).pack(pady=10)
 
+        self.registrar_descendencia_tema(win)
+
     # ------------------ Agregar cliente (placeholders) ------------------
 
     def ventana_agregar_cliente(self):
@@ -481,7 +954,7 @@ class App:
             nombre = self.obtener_valor_entry(entry_nombre)
             telefono = self.obtener_valor_entry(entry_telefono)
             direccion = self.obtener_valor_entry(entry_direccion)
-            comuna = self.obtener_valor_entry(entry_comuna)
+            comuna = self.obtener_comuna_combo(combo_comuna)
             dia_reparto = self.obtener_valor_entry(entry_dia_reparto)  # Nuevo campo para día de reparto
 
             if not nombre or not telefono or not direccion or not comuna:
@@ -499,16 +972,13 @@ class App:
             }
 
             self.data.append(nuevo_cliente)
+            self.actualizar_comunas_existentes(self.comunas)
             self.guardar_estado()
             self.ver_clientes()
             win.destroy()
             messagebox.showinfo("Éxito", "Cliente agregado correctamente.")
 
-        win = tk.Toplevel(self.root)
-        win.title("Agregar Cliente")
-        win.geometry("400x400")
-        win.configure(bg="#f7f9fb")
-        self.centrar_ventana(win)
+        win = self.crear_toplevel_tema("Agregar Cliente", geometry="400x400")
 
         tk.Label(win, text="Agregar Cliente", bg="#f7f9fb", font=("Segoe UI", 14, "bold")).pack(pady=(10, 10))
 
@@ -528,9 +998,8 @@ class App:
         self.aplicar_placeholder(entry_direccion, "Ej: Av. Siempre Viva 742")
 
         tk.Label(win, text="Comuna:", bg="#f7f9fb", font=("Segoe UI", 10)).pack(anchor="w", padx=20)
-        entry_comuna = tk.Entry(win, width=30, font=("Segoe UI", 10))
-        entry_comuna.pack(pady=5)
-        self.aplicar_placeholder(entry_comuna, "Ej: Maipú")
+        combo_comuna = self.crear_combobox_comunas(win, width=28)
+        combo_comuna.pack(pady=5)
 
         tk.Label(win, text="Día de Reparto (opcional):", bg="#f7f9fb", font=("Segoe UI", 10)).pack(anchor="w", padx=20)  # Etiqueta para el nuevo campo
         entry_dia_reparto = tk.Entry(win, width=30, font=("Segoe UI", 10))
@@ -539,15 +1008,12 @@ class App:
 
         ttk.Button(win, text="Guardar", command=guardar_cliente).pack(pady=20)
 
+        self.registrar_descendencia_tema(win)
+
     # ------------------ Nuevo pedido (placeholders + coincidencias) ------------------
 
     def ventana_nuevo_pedido(self):
-        win = tk.Toplevel(self.root)
-        win.title("Nuevo Pedido")
-        win.geometry("500x450")
-        win.resizable(False, False)
-        win.configure(bg="#f7f9fb")
-        self.centrar_ventana(win)
+        win = self.crear_toplevel_tema("Nuevo Pedido", geometry="500x450", resizable=False)
 
         tk.Label(win, text="Buscar cliente (nombre o telefono):", bg="#f7f9fb").pack(pady=(10, 0))
         entry_buscar = tk.Entry(win, width=44, font=("Segoe UI", 10))
@@ -586,48 +1052,43 @@ class App:
         actualizar_resultados(None)
 
         def agregar_pedido():
-            try:
-                sel = listbox.curselection()
-                if not sel:
-                    messagebox.showerror("Error", "Seleccione un cliente.")
-                    return
-                if not resultados or sel[0] >= len(resultados):
-                    messagebox.showerror("Error", "Seleccione un cliente válido de la lista.")
-                    return
+            sel = listbox.curselection()
+            if not sel:
+                messagebox.showerror("Error", "Seleccione un cliente.")
+                return
+            if not resultados or sel[0] >= len(resultados):
+                messagebox.showerror("Error", "Seleccione un cliente válido de la lista.")
+                return
 
-                cliente = resultados[sel[0]]
+            cliente = resultados[sel[0]]
 
-                cantidad_texto = self.obtener_valor_entry(entry_cantidad)
-                if not cantidad_texto:
-                    messagebox.showerror("Error", "El campo de cantidad no puede estar vacío.")
-                    return
-                if not cantidad_texto.isdigit():
-                    messagebox.showerror("Error", "Ingrese un número válido para la cantidad de cajas.")
-                    return
+            cantidad_texto = self.obtener_valor_entry(entry_cantidad)
+            if not cantidad_texto:
+                messagebox.showerror("Error", "El campo de cantidad no puede estar vacío.")
+                return
+            if not cantidad_texto.isdigit():
+                messagebox.showerror("Error", "Ingrese un número válido para la cantidad de cajas.")
+                return
 
-                cantidad = int(cantidad_texto)
-                if cantidad <= 0:
-                    messagebox.showerror("Error", "Ingrese una cantidad mayor que 0.")
-                    return
-                cliente["cajas_de_huevos"] = cliente.get("cajas_de_huevos", 0) + cantidad
-                cliente["cajas_de_huevos_total"] = cliente.get("cajas_de_huevos_total", 0) + cantidad
-                self.guardar_estado()
-                self.ver_clientes()
-                messagebox.showinfo("Éxito", f"Se agregaron {cantidad} cajas a {cliente.get('nombre_completo','')}.")
-                win.destroy()
-            except ValueError:
-                messagebox.showerror("Error", "Ingrese una cantidad válida.")
+            cantidad = int(cantidad_texto)
+            if cantidad <= 0:
+                messagebox.showerror("Error", "Ingrese una cantidad mayor que 0.")
+                return
+            cliente["cajas_de_huevos"] = cliente.get("cajas_de_huevos", 0) + cantidad
+            cliente["cajas_de_huevos_total"] = cliente.get("cajas_de_huevos_total", 0) + cantidad
+            self.guardar_estado()
+            self.ver_clientes()
+            messagebox.showinfo("Éxito", f"Se agregaron {cantidad} cajas a {cliente.get('nombre_completo','')}.")
+            win.destroy()
 
         ttk.Button(win, text="Agregar pedido", command=agregar_pedido).pack(pady=10)
+
+        self.registrar_descendencia_tema(win)
 
     # ------------------ Editar (búsqueda + opciones claras) ------------------
 
     def ventana_editar(self):
-        win = tk.Toplevel(self.root)
-        win.title("Editar Cliente o Pedido")
-        win.geometry("460x420")
-        win.configure(bg="#f7f9fb")
-        self.centrar_ventana(win)
+        win = self.crear_toplevel_tema("Editar Cliente o Pedido", geometry="460x420")
 
         tk.Label(win, text="Buscar cliente (nombre o telefono):", bg="#f7f9fb").pack(pady=(10, 0))
         entry_buscar = tk.Entry(win, width=46, font=("Segoe UI", 10))
@@ -660,11 +1121,7 @@ class App:
             cliente = resultados[sel[0]]
 
             # Ventana de opciones clara (Editar datos, Editar pedido, Eliminar)
-            win_op = tk.Toplevel(self.root)
-            win_op.title("¿Qué deseas hacer?")
-            win_op.geometry("360x160")
-            win_op.configure(bg="#f7f9fb")
-            self.centrar_ventana(win_op)
+            win_op = self.crear_toplevel_tema("¿Qué deseas hacer?", geometry="360x160", resizable=False)
 
             tk.Label(win_op, text=f"{cliente.get('nombre_completo','')}", bg="#f7f9fb", font=("Segoe UI", 11, "bold")).pack(pady=(10, 6))
             tk.Label(win_op, text=f"Pendiente: {cliente.get('cajas_de_huevos',0)} cajas — Comuna: {cliente.get('comuna','')}", bg="#f7f9fb").pack(pady=(0,8))
@@ -698,22 +1155,21 @@ class App:
             ttk.Button(btn_frame, text="Eliminar", width=12, command=eliminar_cliente).grid(row=1, column=0, columnspan=2, pady=6)
             ttk.Button(win_op, text="Cancelar", command=win_op.destroy).pack(pady=(4,6))
 
+            self.registrar_descendencia_tema(win_op)
+
         ttk.Button(win, text="Seleccionar", command=seleccionar).pack(pady=8)
+
+        self.registrar_descendencia_tema(win)
 
     # ------------------ Subventanas de edición ------------------
 
     def editar_datos_cliente(self, cliente):
-        win = tk.Toplevel(self.root)
-        win.title(f"Editar datos: {cliente.get('nombre_completo','')}")
-        win.geometry("360x340")
-        win.configure(bg="#f7f9fb")
-        self.centrar_ventana(win)
+        win = self.crear_toplevel_tema(f"Editar datos: {cliente.get('nombre_completo','')}", geometry="360x340")
 
         campos = [
             ("Nombre completo", "nombre_completo", cliente.get("nombre_completo", "")),
             ("telefono (opcional)", "telefono", cliente.get("telefono", "")),
             ("Dirección", "direccion", cliente.get("direccion", "")),
-            ("Comuna", "comuna", cliente.get("comuna", "")),
         ]
 
         entries = {}
@@ -724,10 +1180,14 @@ class App:
             e.pack()
             entries[key] = e
 
+        tk.Label(win, text="Comuna", bg="#f7f9fb").pack(pady=(8, 0))
+        combo_comuna = self.crear_combobox_comunas(win, valor_inicial=cliente.get("comuna"), width=28)
+        combo_comuna.pack()
+
         def guardar():
             nombre = entries["nombre_completo"].get().strip()
             direccion = entries["direccion"].get().strip()
-            comuna = entries["comuna"].get().strip()
+            comuna = self.obtener_comuna_combo(combo_comuna)
             if not nombre or not direccion or not comuna:
                 messagebox.showerror("Error", "Complete los campos obligatorios.")
                 return
@@ -735,6 +1195,7 @@ class App:
             cliente["telefono"] = entries["telefono"].get().strip()
             cliente["direccion"] = direccion
             cliente["comuna"] = comuna
+            self.actualizar_comunas_existentes(self.comunas)
             self.guardar_estado()
             self.ver_clientes()
             win.destroy()
@@ -742,14 +1203,23 @@ class App:
 
         ttk.Button(win, text="Guardar cambios", command=guardar).pack(pady=12)
 
-    def editar_pedido_cliente(self, cliente):
-        win = tk.Toplevel(self.root)
-        win.title(f"Editar pedido: {cliente.get('nombre_completo','')}")
-        win.geometry("340x240")
-        win.configure(bg="#f7f9fb")
-        self.centrar_ventana(win)
+        self.registrar_descendencia_tema(win)
 
-        tk.Label
+    def editar_pedido_cliente(self, cliente):
+        win = self.crear_toplevel_tema(f"Editar pedido: {cliente.get('nombre_completo','')}", geometry="340x240")
+
+        tk.Label(
+            win,
+            text=f"Cliente: {cliente.get('nombre_completo', '')}",
+            bg="#f7f9fb",
+            font=("Segoe UI", 11, "bold")
+        ).pack(pady=(12, 4))
+        tk.Label(
+            win,
+            text=f"Pendiente actual: {cliente.get('cajas_de_huevos', 0)} cajas",
+            bg="#f7f9fb",
+            font=("Segoe UI", 10)
+        ).pack(pady=(0, 10))
 
         def reemplazar():
             def guardar_reemplazo():
@@ -772,22 +1242,21 @@ class App:
                     messagebox.showinfo("Éxito", "Pedido reemplazado correctamente.")
                 except ValueError:
                     messagebox.showerror("Error", "Ingrese un número válido.")
-            win_replace = tk.Toplevel(self.root)
-            win_replace.title("Reemplazar cantidad pendiente")
-            win_replace.geometry("300x140")
-            win_replace.configure(bg="#f7f9fb")
-            self.centrar_ventana(win_replace)
+            win_replace = self.crear_toplevel_tema("Reemplazar cantidad pendiente", geometry="300x140", resizable=False)
             tk.Label(win_replace, text="Nueva cantidad pendiente:", bg="#f7f9fb").pack(pady=(10,4))
             entry_reemplazar = tk.Entry(win_replace, width=12)
             entry_reemplazar.insert(0, str(cliente.get("cajas_de_huevos",0)))
             entry_reemplazar.pack(pady=6)
             self.aplicar_placeholder(entry_reemplazar, "Ej: 5")
             ttk.Button(win_replace, text="Guardar", command=guardar_reemplazo).pack(pady=6)
+            self.registrar_descendencia_tema(win_replace)
 
         btn_frame = tk.Frame(win, bg="#f7f9fb")
         btn_frame.pack(pady=8)
         ttk.Button(btn_frame, text="Editar cantidad", width=18, command=reemplazar).grid(row=0, column=0, padx=6, pady=6)
         ttk.Button(win, text="Cancelar", command=win.destroy).pack(pady=(6,8))
+
+        self.registrar_descendencia_tema(win)
 
     # ------------------ Resumen / Estadísticas ------------------
 
@@ -796,11 +1265,7 @@ class App:
             messagebox.showinfo("Sin datos", "No hay clientes registrados.")
             return
 
-        win = tk.Toplevel(self.root)
-        win.title("📊 Resumen de Pedidos")
-        win.geometry("540x540")
-        win.configure(bg="#f7f9fb")
-        self.centrar_ventana(win)
+        win = self.crear_toplevel_tema("📊 Resumen de Pedidos", geometry="540x540")
 
         total_pendiente = sum(c.get("cajas_de_huevos", 0) for c in self.data)
         clientes_con_pedido = [c for c in self.data if c.get("cajas_de_huevos", 0) > 0]
@@ -846,6 +1311,8 @@ class App:
 
         ttk.Button(win, text="Cerrar", command=win.destroy).pack(pady=10)
 
+        self.registrar_descendencia_tema(win)
+
     # ------------------ Generar reparto ------------------
 
     def generar_reparto(self):
@@ -858,11 +1325,15 @@ class App:
         comuna = None
 
         if filtrar:
-            comuna = simpledialog.askstring("Filtrar por comuna", "Ingrese el nombre de la comuna:")
-            if not comuna:
-                messagebox.showwarning("Advertencia", "Debe ingresar una comuna válida.")
+            if not self.comunas:
+                messagebox.showwarning("Sin comunas", "No hay comunas registradas. Agrega una antes de filtrar.")
                 return
-            clientes_filtrados = [c for c in self.data if normalizar(c.get("comuna", "")) == normalizar(comuna)]
+            comuna_seleccionada = self.dialogo_seleccion_comuna("Filtrar por comuna", "Selecciona la comuna del reparto:")
+            if not comuna_seleccionada:
+                messagebox.showwarning("Advertencia", "Debe seleccionar una comuna válida.")
+                return
+            comuna = comuna_seleccionada
+            clientes_filtrados = [c for c in self.data if self.estandarizar_comuna(c.get("comuna")) == comuna]
             if not clientes_filtrados:
                 messagebox.showinfo("Sin resultados", f"No hay clientes en la comuna '{comuna}'.")
                 return
@@ -885,14 +1356,14 @@ class App:
             return
 
         fecha_actual = datetime.now().strftime("%d-%m-%Y")
-        nombre_archivo = f"reparto_huevos_{comuna or 'general'}_{fecha_actual}.xlsx"
+        nombre_archivo = f"reparto_huevos_{(comuna or 'general').replace(' ', '_').lower()}_{fecha_actual}.xlsx"
 
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = "Reparto Huevos"
 
         # Definir encabezados y asegurarse de que `ws` esté correctamente utilizado
-        encabezados = ["Nombre completo", "Teléfono", "Dirección", "Comuna", "Cajas de huevos", "Monto a pagar"]
+        encabezados = ["Nombre completo", "Teléfono", "Dirección", "Comuna", "Cajas de huevos", "Monto a pagar", "Pagado SI/NO", "Metodo de pago"]
         ws.append(encabezados)
         for cell in ws[1]:
             cell.font = Font(bold=True)
@@ -903,8 +1374,8 @@ class App:
 
         for cliente in clientes_con_pedidos:
             cajas = cliente.get("cajas_de_huevos", 0)
-            comuna = cliente.get("comuna", "")
-            precio = self.precios_por_comuna.get(comuna, PRECIO_CAJA)  # Usar precio por comuna si existe
+            comuna_cliente = self.estandarizar_comuna(cliente.get("comuna"))
+            precio = self.obtener_precio_por_comuna(comuna_cliente)
             monto_a_pagar = cajas * precio
             total_cajas += cajas
             total_ganancias += monto_a_pagar
@@ -913,7 +1384,7 @@ class App:
                 cliente.get("nombre_completo", ""),
                 cliente.get("telefono", ""),
                 cliente.get("direccion", ""),
-                comuna,
+                comuna_cliente,
                 cajas,
                 f"${monto_a_pagar:,.0f}".replace(",", ".")  # Formato $000.000.000
             ])
@@ -952,60 +1423,194 @@ class App:
 
     # Crear una nueva ventana para gestionar precios por comuna
     def gestionar_precios_por_comuna(self):
-        win = tk.Toplevel(self.root)
-        win.title("Gestionar Precios por Comuna")
-        win.geometry("400x400")
-        win.configure(bg="#f7f9fb")
-        self.centrar_ventana(win)
+        win = self.crear_toplevel_tema("Gestionar Precios por Comuna", geometry="460x520")
 
-        tk.Label(win, text="Precios por Comuna", bg="#f7f9fb", font=("Segoe UI", 12, "bold")).pack(pady=(10, 6))
-
-        frame = tk.Frame(win, bg="#f7f9fb")
-        frame.pack(fill="both", expand=True, padx=10, pady=10)
-
-        tree = ttk.Treeview(frame, columns=("Comuna", "Precio"), show="headings", height=10)
-        tree.heading("Comuna", text="Comuna")
-        tree.heading("Precio", text="Precio")
-        tree.column("Comuna", anchor="center", width=200)
-        tree.column("Precio", anchor="center", width=100)
-        tree.pack(fill="both", expand=True, pady=10)
-
-        for comuna, precio in self.precios_por_comuna.items():
-            tree.insert("", "end", values=(comuna, f"${precio}"))
-
-        def agregar_precio():
-            comuna = simpledialog.askstring("Agregar Comuna", "Ingrese el nombre de la comuna:")
-            if not comuna:
-                return
+        def formatear_moneda(valor):
             try:
-                precio = int(simpledialog.askstring("Agregar Precio", f"Ingrese el precio para {comuna}:").strip())
-                if precio <= 0:
-                    messagebox.showerror("Error", "El precio debe ser mayor a 0.")
-                    return
-                self.precios_por_comuna[comuna] = precio
-                self.guardar_estado()
-                tree.insert("", "end", values=(comuna, f"${precio}"))
-                messagebox.showinfo("Éxito", f"Precio para {comuna} agregado correctamente.")
-            except ValueError:
-                messagebox.showerror("Error", "Ingrese un número válido.")
+                return f"${float(valor):,.0f}".replace(",", ".")
+            except (TypeError, ValueError):
+                return "$0"
 
-        def eliminar_precio():
-            sel = tree.selection()
-            if not sel:
-                messagebox.showerror("Error", "Seleccione una comuna para eliminar.")
+        tk.Label(win, text="Precios por Comuna", bg="#f7f9fb", font=("Segoe UI", 13, "bold")).pack(pady=(10, 4))
+        tk.Label(
+            win,
+            text=f"Precio general actual: {formatear_moneda(PRECIO_CAJA)}",
+            bg="#f7f9fb",
+            font=("Segoe UI", 10)
+        ).pack(pady=(0, 8))
+
+        selector_frame = tk.LabelFrame(win, text="Asignar precio personalizado", bg="#f7f9fb", padx=8, pady=8)
+        selector_frame.pack(fill="x", padx=12, pady=(0, 12))
+
+        tk.Label(selector_frame, text="Comuna:", bg="#f7f9fb", font=("Segoe UI", 10)).grid(row=0, column=0, sticky="w")
+        combo_comuna = self.crear_combobox_comunas(selector_frame, width=26)
+        combo_comuna.grid(row=0, column=1, sticky="ew", padx=(8, 0))
+
+        tk.Label(selector_frame, text="Precio personalizado:", bg="#f7f9fb", font=("Segoe UI", 10)).grid(row=1, column=0, sticky="w", pady=(6, 0))
+        entry_precio = tk.Entry(selector_frame, width=18, font=("Segoe UI", 10))
+        entry_precio.grid(row=1, column=1, sticky="w", padx=(8, 0), pady=(6, 0))
+        self.aplicar_placeholder(entry_precio, "Ej: 7500")
+
+        botones_selector = tk.Frame(selector_frame, bg="#f7f9fb")
+        botones_selector.grid(row=2, column=0, columnspan=2, sticky="w", pady=(10, 0))
+        btn_guardar_selector = ttk.Button(botones_selector, text="Guardar precio", width=18)
+        btn_guardar_selector.pack(side="left", padx=(0, 8))
+        btn_restablecer_selector = ttk.Button(botones_selector, text="Usar precio general", width=20)
+        btn_restablecer_selector.pack(side="left")
+
+        selector_frame.columnconfigure(1, weight=1)
+
+        tree_frame = tk.Frame(win, bg="#f7f9fb")
+        tree_frame.pack(fill="both", expand=True, padx=12, pady=(0, 8))
+
+        columnas = ("Comuna", "Precio", "Origen")
+        tree = ttk.Treeview(tree_frame, columns=columnas, show="headings", height=12)
+        tree.heading("Comuna", text="Comuna")
+        tree.heading("Precio", text="Precio actual")
+        tree.heading("Origen", text="Origen del precio")
+        tree.column("Comuna", anchor="center", width=180)
+        tree.column("Precio", anchor="center", width=130)
+        tree.column("Origen", anchor="center", width=130)
+
+        scrollbar = ttk.Scrollbar(tree_frame, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=scrollbar.set)
+        tree.grid(row=0, column=0, sticky="nsew")
+        scrollbar.grid(row=0, column=1, sticky="ns")
+        tree_frame.columnconfigure(0, weight=1)
+        tree_frame.rowconfigure(0, weight=1)
+
+        resumen_label = tk.Label(win, text="", bg="#f7f9fb", font=("Segoe UI", 10))
+        resumen_label.pack(anchor="w", padx=14)
+
+        def actualizar_entry_para_comuna(comuna_objetivo):
+            if not comuna_objetivo:
+                placeholder_text = getattr(entry_precio, "_placeholder_text", "")
+                placeholder_color = getattr(entry_precio, "_placeholder_color", "#777")
+                entry_precio.delete(0, tk.END)
+                if placeholder_text:
+                    entry_precio.insert(0, placeholder_text)
+                entry_precio.config(fg=placeholder_color)
                 return
-            comuna = tree.item(sel[0], "values")[0]
-            if messagebox.askyesno("Confirmar", f"¿Eliminar el precio para {comuna}?"):
-                del self.precios_por_comuna[comuna]
-                self.guardar_estado()
-                tree.delete(sel[0])
-                messagebox.showinfo("Éxito", f"Precio para {comuna} eliminado correctamente.")
+            if comuna_objetivo in self.precios_por_comuna:
+                entry_precio.delete(0, tk.END)
+                entry_precio.insert(0, str(self.precios_por_comuna[comuna_objetivo]))
+                entry_precio.config(fg=getattr(entry_precio, "_text_color", "#000"))
+            else:
+                placeholder_text = getattr(entry_precio, "_placeholder_text", "")
+                placeholder_color = getattr(entry_precio, "_placeholder_color", "#777")
+                entry_precio.delete(0, tk.END)
+                if placeholder_text:
+                    entry_precio.insert(0, placeholder_text)
+                entry_precio.config(fg=placeholder_color)
 
-        btn_frame = tk.Frame(win, bg="#f7f9fb")
-        btn_frame.pack(pady=10)
-        ttk.Button(btn_frame, text="Agregar", command=agregar_precio).grid(row=0, column=0, padx=5)
-        ttk.Button(btn_frame, text="Eliminar", command=eliminar_precio).grid(row=0, column=1, padx=5)
-        ttk.Button(win, text="Cerrar", command=win.destroy).pack(pady=10)
+        def refrescar_tree(seleccionar_actual=None):
+            tree.delete(*tree.get_children())
+            comunas_union = set(self.comunas)
+            comunas_union.update(self.estandarizar_comuna(c) for c in self.precios_por_comuna.keys())
+            comunas_ordenadas = sorted(c for c in comunas_union if c)
+            personalizados = 0
+            for comuna in comunas_ordenadas:
+                if comuna in self.precios_por_comuna:
+                    precio = self.precios_por_comuna[comuna]
+                    origen = "Personalizado"
+                    personalizados += 1
+                else:
+                    precio = PRECIO_CAJA
+                    origen = "General"
+                tree.insert("", "end", iid=comuna, values=(comuna, formatear_moneda(precio), origen))
+            resumen_label.config(
+                text=f"Comunas registradas: {len(comunas_ordenadas)} • Personalizados: {personalizados}"
+            )
+            if seleccionar_actual and tree.exists(seleccionar_actual):
+                tree.selection_set(seleccionar_actual)
+                tree.see(seleccionar_actual)
+
+        refrescar_tree()
+
+        def guardar_precio_personalizado():
+            comuna_sel = self.obtener_comuna_combo(combo_comuna)
+            if not comuna_sel:
+                messagebox.showerror("Error", "Selecciona una comuna para asignar un precio.")
+                return
+            valor_ingresado = self.obtener_valor_entry(entry_precio)
+            if not valor_ingresado:
+                messagebox.showerror("Error", "Ingresa un precio para la comuna seleccionada.")
+                return
+            digitos = ''.join(ch for ch in valor_ingresado if ch.isdigit())
+            if not digitos:
+                messagebox.showerror("Error", "El precio debe contener solo números.")
+                return
+            precio = int(digitos)
+            if precio <= 0:
+                messagebox.showerror("Error", "El precio debe ser mayor a 0.")
+                return
+            comuna_registrada = self.registrar_comuna(comuna_sel)
+            self.precios_por_comuna[comuna_registrada] = precio
+            self.guardar_estado()
+            self.ver_clientes()
+            combo_comuna.set(comuna_registrada)
+            refrescar_tree(seleccionar_actual=comuna_registrada)
+            actualizar_entry_para_comuna(comuna_registrada)
+            messagebox.showinfo(
+                "Éxito",
+                f"Precio personalizado para {comuna_registrada} guardado en {formatear_moneda(precio)}."
+            )
+
+        def restablecer_precio_general():
+            comuna_sel = self.obtener_comuna_combo(combo_comuna)
+            if not comuna_sel:
+                messagebox.showerror("Error", "Selecciona una comuna para restablecer el precio general.")
+                return
+            comuna_registrada = self.registrar_comuna(comuna_sel, actualizar_opciones=False)
+            if comuna_registrada not in self.precios_por_comuna:
+                messagebox.showinfo("Sin cambios", "La comuna ya usa el precio general.")
+                actualizar_entry_para_comuna(comuna_registrada)
+                return
+            if not messagebox.askyesno(
+                "Confirmar",
+                f"¿Restablecer el precio general para {comuna_registrada}?"
+            ):
+                return
+            self.precios_por_comuna.pop(comuna_registrada, None)
+            self.guardar_estado()
+            self.ver_clientes()
+            refrescar_tree(seleccionar_actual=comuna_registrada)
+            actualizar_entry_para_comuna(comuna_registrada)
+            messagebox.showinfo(
+                "Éxito",
+                f"{comuna_registrada} volverá a usar el precio general ({formatear_moneda(PRECIO_CAJA)})."
+            )
+
+        def on_tree_select(_):
+            seleccion = tree.selection()
+            if not seleccion:
+                return
+            comuna_sel = tree.item(seleccion[0], "values")[0]
+            combo_comuna.set(comuna_sel)
+            actualizar_entry_para_comuna(comuna_sel)
+
+        tree.bind("<<TreeviewSelect>>", on_tree_select)
+
+        def on_combobox_change(_):
+            comuna_sel = self.obtener_comuna_combo(combo_comuna)
+            refrescar_tree(seleccionar_actual=comuna_sel)
+            actualizar_entry_para_comuna(comuna_sel)
+
+        combo_comuna.bind("<<ComboboxSelected>>", on_combobox_change, add="+")
+
+        entry_precio.bind("<Return>", lambda _: guardar_precio_personalizado())
+        btn_guardar_selector.config(command=guardar_precio_personalizado)
+        btn_restablecer_selector.config(command=restablecer_precio_general)
+
+        botones = tk.Frame(win, bg="#f7f9fb")
+        botones.pack(pady=12)
+        ttk.Button(botones, text="Guardar precio", command=guardar_precio_personalizado).grid(row=0, column=0, padx=6)
+        ttk.Button(botones, text="Restablecer general", command=restablecer_precio_general).grid(row=0, column=1, padx=6)
+        ttk.Button(botones, text="Cerrar", command=win.destroy).grid(row=0, column=2, padx=6)
+
+        actualizar_entry_para_comuna(self.obtener_comuna_combo(combo_comuna))
+
+        self.registrar_descendencia_tema(win)
 
     # ------------------ Agregar día de reparto ------------------
 
@@ -1028,11 +1633,7 @@ class App:
 
         cliente = self.data[self.tree.index(sel[0])]
 
-        win = tk.Toplevel(self.root)
-        win.title("Agregar Día de Reparto")
-        win.geometry("300x150")
-        win.configure(bg="#f7f9fb")
-        self.centrar_ventana(win)
+        win = self.crear_toplevel_tema("Agregar Día de Reparto", geometry="300x150")
 
         tk.Label(win, text=f"Cliente: {cliente['nombre_completo']}", bg="#f7f9fb", font=("Segoe UI", 11)).pack(pady=(10, 4))
         tk.Label(win, text="Día de reparto:", bg="#f7f9fb", font=("Segoe UI", 10)).pack(pady=(4, 0))
@@ -1045,6 +1646,8 @@ class App:
         self.aplicar_placeholder(entry_dia, "Ej: Lunes")
 
         ttk.Button(win, text="Guardar", command=guardar_dia).pack(pady=10)
+
+        self.registrar_descendencia_tema(win)
 
 # ------------------ Ejecución ------------------
 
